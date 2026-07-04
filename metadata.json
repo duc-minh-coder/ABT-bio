@@ -1,0 +1,6 @@
+{
+  "name": "ABT Biomedical Equipment Website",
+  "description": "Website giới thiệu và kinh doanh thiết bị y sinh ABT dành cho học phần Bài tập lớn. Hỗ trợ giỏ hàng, thanh toán mô phỏng PayOS/PayPal, quản lý đơn hàng cho Admin và User.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
