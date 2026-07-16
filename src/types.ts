@@ -16,7 +16,12 @@ export interface CartItem {
   quantity: number;
 }
 
-export type OrderStatus = 'pending_payment' | 'paid' | 'shipping' | 'completed' | 'cancelled';
+export type OrderStatus =
+  | "pending_payment"
+  | "paid"
+  | "shipping"
+  | "completed"
+  | "cancelled";
 
 export interface Order {
   id: string;
@@ -26,7 +31,7 @@ export interface Order {
   phone: string;
   address: string;
   organization: string; // Tên bệnh viện / phòng thí nghiệm
-  paymentMethod: 'payos' | 'paypal';
+  paymentMethod: "payos" | "paypal";
   items: {
     product: Product;
     quantity: number;
@@ -34,21 +39,34 @@ export interface Order {
   }[];
   status: OrderStatus;
   total: number;
-  paymentStatus: 'unpaid' | 'paid' | 'refunded';
+  paymentStatus: "unpaid" | "paid" | "refunded";
   notes?: string;
 }
 
-export type AppRole = 'user' | 'admin';
-export type ActiveTab = 'home' | 'products' | 'cart' | 'checkout' | 'orders' | 'admin' | 'posts' | 'login';
+export type AppRole = "user" | "admin";
+export type ActiveTab =
+  | "home"
+  | "products"
+  | "cart"
+  | "checkout"
+  | "orders"
+  | "admin"
+  | "posts"
+  | "login";
 
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
   role: AppRole;
-  status: 'active' | 'blocked';
+  status: "active" | "blocked";
   department: string;
   createdAt: string;
+  avatarUrl?: string;
+  verified?: boolean;
+  lastTimeChange?: string;
+  updatedAt?: string;
+  contactPhone?: string;
 }
 
 export interface Post {
@@ -62,4 +80,3 @@ export interface Post {
   image: string;
   readTime: string;
 }
-
