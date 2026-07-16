@@ -4,6 +4,7 @@ import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShieldCheck, Ticket, Rot
 
 interface CartViewProps {
   cartItems: CartItem[];
+  isLoading?: boolean;
   onUpdateQuantity: (productId: string, delta: number) => void;
   onRemoveItem: (productId: string) => void;
   onClearCart: () => void;
@@ -14,6 +15,7 @@ interface CartViewProps {
 
 export default function CartView({
   cartItems,
+  isLoading = false,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -48,6 +50,25 @@ export default function CartView({
       setPromoError('Mã ưu đãi không chính xác hoặc đã hết hạn.');
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-64 rounded bg-slate-200 dark:bg-slate-800" />
+          <div className="grid gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-8 space-y-4">
+              <div className="h-48 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+              <div className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+            </div>
+            <div className="lg:col-span-4">
+              <div className="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (

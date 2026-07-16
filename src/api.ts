@@ -514,10 +514,19 @@ export async function checkoutCart(payload: {
   }>;
   total: number;
   notes?: string;
+  status?: string;
+  paymentStatus?: string;
 }) {
+  const normalizedPayload = {
+    ...payload,
+    paymentMethod: payload.paymentMethod?.toUpperCase() ?? "PAYOS",
+    status: payload.status ?? "pending_payment",
+    paymentStatus: payload.paymentStatus ?? "unpaid",
+  };
+
   const response = await requestJson<unknown>("/cart/checkout", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizedPayload),
   });
   return toOrder((response.result as OrderPayload) ?? null);
 }

@@ -108,6 +108,7 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [discountRate, setDiscountRate] = useState<number>(0);
+  const [isCartLoading, setIsCartLoading] = useState(true);
   const [selectedProductDetail, setSelectedProductDetail] =
     useState<Product | null>(null);
 
@@ -127,6 +128,17 @@ export default function App() {
     setTimeout(() => {
       setToast((prev) => (prev?.id === id ? null : prev));
     }, 4000);
+  };
+
+  const refreshCartFromServer = async () => {
+    try {
+      const serverCart = await getCart();
+      const normalizedCart = Array.isArray(serverCart) ? serverCart : [];
+      setCartItems(normalizedCart);
+      return normalizedCart;
+    } catch {
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -150,6 +162,8 @@ export default function App() {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      setIsCartLoading(true);
+
       try {
         const [apiProducts, apiCategories, apiUsers] = await Promise.all([
           listProducts(),
@@ -175,6 +189,7 @@ export default function App() {
       }
 
       if (!currentUser) {
+        setIsCartLoading(false);
         return;
       }
 
@@ -185,12 +200,19 @@ export default function App() {
         ]);
         if (serverCart.length > 0) {
           setCartItems(serverCart);
+        } else {
+          setCartItems([]);
         }
         if (serverOrders.length > 0) {
           setOrders(serverOrders);
+        } else {
+          setOrders([]);
         }
       } catch {
-        // ignore if API is unavailable
+        setCartItems([]);
+        setOrders([]);
+      } finally {
+        setIsCartLoading(false);
       }
     };
 
@@ -210,22 +232,23 @@ export default function App() {
       return;
     }
 
-    try {
-      const nextCart = await addCartItem(product.id, 1);
-      setCartItems(nextCart);
-      showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
-    } catch (error) {
-      if (existing) {
-        setCartItems(
-          cartItems.map((item) =>
-            item.product.id === product.id
-              ? { ...item, quantity: item.quantity + 1 }
-              : item,
-          ),
+    setCartItems((prev) => {
+      const alreadyExists = prev.some((item) => item.product.id === product.id);
+      if (alreadyExists) {
+        return prev.map((item) =>
+          item.product.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item,
         );
-      } else {
-        setCartItems([...cartItems, { product, quantity: 1 }]);
       }
+      return [...prev, { product, quantity: 1 }];
+    });
+
+    try {
+      await addCartItem(product.id, 1);
+      await refreshCartFromServer();
+      showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
+    } catch {
       showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
     }
   };
@@ -248,44 +271,43 @@ export default function App() {
     }
 
     if (delta > 0) {
+      setCartItems((prev) =>
+        prev.map((item) => {
+          if (item.product.id === productId) {
+            return { ...item, quantity: Math.max(1, nextVal) };
+          }
+          return item;
+        }),
+      );
+
       try {
-        const nextCart = await addCartItem(productId, 1);
-        setCartItems(nextCart);
+        await addCartItem(productId, 1);
+        await refreshCartFromServer();
         return;
       } catch {
-        setCartItems(
-          cartItems.map((item) => {
-            if (item.product.id === productId) {
-              return { ...item, quantity: Math.max(1, nextVal) };
-            }
-            return item;
-          }),
-        );
+        showToast(`Đã cập nhật số lượng thiết bị trong giỏ hàng`, "info");
+        return;
       }
     }
 
     if (nextVal <= 0) {
-      const index = cartItems.findIndex(
-        (item) => item.product.id === productId,
-      );
+      const index = cartItems.findIndex((item) => item.product.id === productId);
       if (index >= 0) {
+        setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
         try {
-          const nextCart = await removeCartItem(index);
-          setCartItems(nextCart);
+          await removeCartItem(productId);
+          await refreshCartFromServer();
           showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
           return;
         } catch {
-          setCartItems(
-            cartItems.filter((item) => item.product.id !== productId),
-          );
           showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
           return;
         }
       }
     }
 
-    setCartItems(
-      cartItems.map((item) => {
+    setCartItems((prev) =>
+      prev.map((item) => {
         if (item.product.id === productId) {
           return { ...item, quantity: Math.max(1, nextVal) };
         }
@@ -301,12 +323,13 @@ export default function App() {
       return;
     }
 
+    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
+
     try {
-      const nextCart = await removeCartItem(productId);
-      setCartItems(nextCart);
+      await removeCartItem(productId);
+      await refreshCartFromServer();
       showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
     } catch {
-      setCartItems(cartItems.filter((item) => item.product.id !== productId));
       showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
     }
   };
@@ -707,6 +730,7 @@ export default function App() {
             {currentPath === "/cart" && (
               <CartView
                 cartItems={cartItems}
+                isLoading={isCartLoading}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemoveItem={handleRemoveItem}
                 onClearCart={handleClearCart}

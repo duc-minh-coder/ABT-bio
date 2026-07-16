@@ -120,7 +120,23 @@ export default function CheckoutPayment({
       setError(null);
       const data = await requestJson("/cart/checkout", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          customerName: customerInfo.fullName,
+          email: customerInfo.email,
+          phone: customerInfo.phone,
+          address: customerInfo.address,
+          organization: customerInfo.organization,
+          paymentMethod: paymentMethod.toUpperCase(),
+          items: items.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            priceAtOrder: item.product.price,
+          })),
+          total: totalAmount,
+          notes: notes?.trim() ? notes : undefined,
+          status: "pending_payment",
+          paymentStatus: "unpaid",
+        }),
       });
       const nextOrder = {
         id: data?.id || data?.orderId || "",

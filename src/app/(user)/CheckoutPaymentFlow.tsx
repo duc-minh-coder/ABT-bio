@@ -183,7 +183,17 @@ export default function CheckoutPaymentFlow({
           email: customerInfo.email,
           phone: customerInfo.phone,
           address: customerInfo.address,
-          paymentMethod: "PAYOS", // Backend yêu cầu trường này
+          organization: customerInfo.organization,
+          paymentMethod: "PAYOS",
+          items: items.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            priceAtOrder: item.product.price,
+          })),
+          total: totalAmount,
+          notes: customerInfo.notes,
+          status: "pending_payment",
+          paymentStatus: "unpaid",
         }),
       });
 

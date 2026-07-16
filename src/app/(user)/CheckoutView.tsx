@@ -232,7 +232,23 @@ export default function CheckoutView({
 
       const data = await requestJson<CheckoutOrderResponse>("/cart/checkout", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          customerName,
+          email,
+          phone,
+          address,
+          organization,
+          paymentMethod: paymentMethod.toUpperCase(),
+          items: cartItems.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            priceAtOrder: item.product.price,
+          })),
+          total,
+          notes: notes.trim() !== "" ? notes : undefined,
+          status: "pending_payment",
+          paymentStatus: "unpaid",
+        }),
       });
 
       const nextOrderId = data?.result?.id || "";
