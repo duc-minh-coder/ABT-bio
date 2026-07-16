@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CATEGORIES } from "../../data";
 import { Product } from "../../types";
 import {
   Search,
@@ -18,6 +17,7 @@ import {
 
 interface ProductsViewProps {
   products: Product[];
+  categories: string[];
   onAddToCart: (product: Product) => void;
   selectedProductDetail: Product | null;
   onSetSelectedProductDetail: (product: Product | null) => void;
@@ -27,6 +27,7 @@ type PricePreset = "all" | "under_50m" | "50m_150m" | "above_150m";
 
 export default function ProductsView({
   products,
+  categories,
   onAddToCart,
   selectedProductDetail,
   onSetSelectedProductDetail,
@@ -83,10 +84,11 @@ export default function ProductsView({
   }, [searchQuery, selectedCategory, selectedPricePreset, sortBy]);
 
   const availableCategories = useMemo(() => {
-    const categories = new Set<string>([...CATEGORIES]);
-    products.forEach((product) => categories.add(product.category));
-    return Array.from(categories);
-  }, [products]);
+    const unique = new Set<string>(["Tất cả sản phẩm"]);
+    categories.forEach((category) => unique.add(category));
+    products.forEach((product) => unique.add(product.category));
+    return Array.from(unique);
+  }, [categories, products]);
 
   const pricePresets = [
     { value: "all", label: "Mọi mức giá" },

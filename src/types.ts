@@ -9,6 +9,7 @@ export interface Product {
   specs: string[];
   stock: number;
   featured?: boolean;
+  slug?: string;
 }
 
 export interface CartItem {

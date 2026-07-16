@@ -1,4 +1,4 @@
-import type { CartItem, Order, OrderStatus, Product, AppRole } from "./types";
+import type { CartItem, Order, OrderStatus, Product, UserAccount } from "./types";
 
 type ApiResponse<T> = {
   code: number;
@@ -29,15 +29,27 @@ type MePayload = {
 type ProductPayload = {
   id?: number | string;
   name?: string;
-  category?: string;
+  category?: string | { name?: string } | null;
   price?: number | string;
   unit?: string;
   image?: string;
   description?: string;
+  detailedDescription?: string;
+  thumbnailUrl?: string;
+  galleryUrls?: string[];
   specs?: string[];
   stock?: number | string;
+  inventoryCount?: number | string;
   featured?: boolean;
+  isPopular?: boolean;
   slug?: string;
+  amount?: number | string;
+  originalAmount?: number | string;
+  prices?: Array<{
+    amount?: number | string;
+    originalAmount?: number | string;
+    currency?: string;
+  }>;
 };
 
 type CartPayload = {
@@ -53,7 +65,7 @@ type OrderPayload = {
   phone?: string;
   address?: string;
   organization?: string;
-  paymentMethod?: "payos" | "paypal";
+  paymentMethod?: "payos" | "paypal" | "COD" | string;
   items?: Array<{
     product?: ProductPayload;
     quantity?: number | string;
@@ -63,6 +75,16 @@ type OrderPayload = {
   total?: number | string;
   paymentStatus?: string;
   notes?: string;
+};
+
+type CategoryPayload = {
+  id?: number | string;
+  name?: string;
+  slug?: string;
+  image?: string;
+  description?: string;
+  status?: string;
+  productCount?: number | string;
 };
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(
@@ -102,26 +124,54 @@ async function requestJson<T>(
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
 
-  if (!response.ok || (data && data.code !== 0)) {
+  if (!response.ok) {
     const message = data?.message || "Yêu cầu API thất bại.";
     throw new Error(message);
   }
 
-  return data as ApiResponse<T>;
+  const wrappedResult =
+    data && typeof data === "object" && "result" in data ? data.result : data;
+  const hasErrorCode =
+    data && typeof data === "object" && "code" in data && data.code !== 0;
+
+  if (hasErrorCode) {
+    const message = data?.message || "Yêu cầu API thất bại.";
+    throw new Error(message);
+  }
+
+  return {
+    code: data?.code ?? 0,
+    message: data?.message,
+    result: wrappedResult as T,
+  };
 }
 
 function toProduct(payload?: ProductPayload | null): Product {
+  const categoryName =
+    typeof payload?.category === "object" && payload.category
+      ? payload.category.name
+      : payload?.category;
+  const pricePayload = Array.isArray(payload?.prices)
+    ? payload.prices[0]
+    : null;
+
   return {
     id: String(payload?.id ?? ""),
     name: payload?.name ?? "Sản phẩm",
-    category: payload?.category ?? "Khác",
-    price: Number(payload?.price ?? 0),
+    category: categoryName || "Khác",
+    price: Number(
+      pricePayload?.amount ?? payload?.amount ?? payload?.price ?? 0,
+    ),
     unit: payload?.unit ?? "thiết bị",
-    image: payload?.image ?? "",
-    description: payload?.description ?? "",
-    specs: Array.isArray(payload?.specs) ? payload.specs : [],
-    stock: Number(payload?.stock ?? 0),
-    featured: Boolean(payload?.featured),
+    image: payload?.thumbnailUrl ?? payload?.image ?? "",
+    description: payload?.detailedDescription ?? payload?.description ?? "",
+    specs: Array.isArray(payload?.galleryUrls)
+      ? payload.galleryUrls
+      : Array.isArray(payload?.specs)
+        ? payload.specs
+        : [],
+    stock: Number(payload?.inventoryCount ?? payload?.stock ?? 0),
+    featured: Boolean(payload?.isPopular ?? payload?.featured),
     slug: payload?.slug,
   };
 }
@@ -181,7 +231,12 @@ function toOrder(payload?: OrderPayload | null): Order {
     phone: payload?.phone ?? "",
     address: payload?.address ?? "",
     organization: payload?.organization ?? "",
-    paymentMethod: payload?.paymentMethod === "paypal" ? "paypal" : "payos",
+    paymentMethod:
+      payload?.paymentMethod === "paypal"
+        ? "paypal"
+        : payload?.paymentMethod === "COD"
+          ? "payos"
+          : "payos",
     items: (payload?.items ?? []).map((item) => ({
       product: toProduct(item.product),
       quantity: Number(item.quantity ?? 0),
@@ -205,6 +260,9 @@ function normalizePage<T>(payload: unknown, mapper: (item: any) => T): T[] {
     }
     if (Array.isArray(maybeContent.items)) {
       return maybeContent.items.map(mapper);
+    }
+    if (Array.isArray(maybeContent.result)) {
+      return maybeContent.result.map(mapper);
     }
   }
   return [];
@@ -242,9 +300,27 @@ export async function listProducts() {
   return normalizePage<ProductPayload>(response.result, toProduct);
 }
 
+export async function getBestSellingProducts() {
+  const response = await requestJson<unknown>("/products/best-selling");
+  return normalizePage<ProductPayload>(response.result, toProduct);
+}
+
 export async function getProductById(id: string | number) {
   const response = await requestJson<unknown>(`/products/${id}`);
   return toProduct((response.result as ProductPayload) ?? null);
+}
+
+export async function listCategories() {
+  const response = await requestJson<unknown>("/categories?page=0&size=20");
+  return normalizePage<CategoryPayload>(response.result, (payload) => ({
+    id: String(payload?.id ?? ""),
+    name: payload?.name ?? "Khác",
+    slug: payload?.slug,
+    image: payload?.image,
+    description: payload?.description,
+    status: payload?.status,
+    productCount: Number(payload?.productCount ?? 0),
+  }));
 }
 
 export async function getCart() {
@@ -295,6 +371,13 @@ export async function checkoutCart(payload: {
 export async function listOrders() {
   const response = await requestJson<unknown>("/orders?page=0&size=20");
   return normalizePage<OrderPayload>(response.result, toOrder);
+}
+
+export async function listAdminUsers() {
+  const response = await requestJson<unknown>("/admin/users?page=0&size=20");
+  return normalizePage<MePayload>(response.result, (payload) =>
+    toUserAccount(payload as MePayload),
+  );
 }
 
 export function getStoredAuthTokens() {

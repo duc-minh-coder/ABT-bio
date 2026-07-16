@@ -9,12 +9,7 @@ import {
   UserAccount,
   Post,
 } from "./types";
-import {
-  BIOMEDICAL_PRODUCTS,
-  MOCK_ORDERS,
-  MOCK_USERS,
-  MOCK_POSTS,
-} from "./data";
+import { MOCK_POSTS } from "./data";
 import {
   addCartItem,
   checkoutCart,
@@ -22,6 +17,8 @@ import {
   getCurrentUser,
   getStoredAuthTokens,
   getCart,
+  listAdminUsers,
+  listCategories,
   listOrders,
   listProducts,
   loginUser,
@@ -73,9 +70,9 @@ export default function App() {
   const [users, setUsers] = useState<UserAccount[]>(() => {
     try {
       const saved = localStorage.getItem("abt_users");
-      return saved ? JSON.parse(saved) : MOCK_USERS;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      return MOCK_USERS;
+      return [];
     }
   });
   const [posts, setPosts] = useState<Post[]>(() => {
@@ -123,9 +120,17 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem("abt_products");
-      return saved ? JSON.parse(saved) : BIOMEDICAL_PRODUCTS;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      return BIOMEDICAL_PRODUCTS;
+      return [];
+    }
+  });
+  const [categories, setCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("abt_categories");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
     }
   });
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -139,9 +144,9 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
       const saved = localStorage.getItem("abt_orders");
-      return saved ? JSON.parse(saved) : MOCK_ORDERS;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      return MOCK_ORDERS;
+      return [];
     }
   });
 
@@ -165,6 +170,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("abt_products", JSON.stringify(products));
   }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem("abt_categories", JSON.stringify(categories));
+  }, [categories]);
 
   useEffect(() => {
     localStorage.setItem("abt_cart_items", JSON.stringify(cartItems));
@@ -217,12 +226,23 @@ export default function App() {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const apiProducts = await listProducts();
+        const [apiProducts, apiCategories, apiUsers] = await Promise.all([
+          listProducts(),
+          listCategories(),
+          currentUser?.role === "admin" ? listAdminUsers() : Promise.resolve([]),
+        ]);
+
         if (apiProducts.length > 0) {
           setProducts(apiProducts);
         }
+        if (apiCategories.length > 0) {
+          setCategories(apiCategories.map((category) => category.name));
+        }
+        if (apiUsers.length > 0) {
+          setUsers(apiUsers);
+        }
       } catch {
-        // fallback to local data
+        // ignore if API is unavailable
       }
 
       if (!currentUser) {
@@ -600,6 +620,7 @@ export default function App() {
             {currentPath === "/products" && (
               <ProductsView
                 products={products}
+                categories={categories}
                 onAddToCart={handleAddToCart}
                 selectedProductDetail={selectedProductDetail}
                 onSetSelectedProductDetail={setSelectedProductDetail}
