@@ -8,7 +8,6 @@ import {
   Truck,
   TrendingUp,
 } from "lucide-react";
-import { BIOMEDICAL_PRODUCTS } from "../../data";
 import { Order, OrderStatus } from "../../types";
 
 interface AdminOrdersPanelProps {
@@ -73,23 +72,25 @@ export default function AdminOrdersPanel({
     (o) => o.status === "shipping",
   ).length;
 
-  const categorySales = BIOMEDICAL_PRODUCTS.reduce(
-    (acc, prod) => {
-      const count = orders
-        .filter((o) => o.status !== "cancelled")
-        .flatMap((o) => o.items)
-        .filter((item) => item.product.id === prod.id)
-        .reduce((sum, item) => sum + item.quantity, 0);
-
-      const revenue = count * prod.price;
-      const existingCat = acc.find((c) => c.name === prod.category);
-
-      if (existingCat) {
-        existingCat.revenue += revenue;
-        existingCat.count += count;
-      } else {
-        acc.push({ name: prod.category, revenue, count });
+  const categorySales = orders.reduce(
+    (acc, order) => {
+      if (order.status === "cancelled") {
+        return acc;
       }
+
+      order.items.forEach((item) => {
+        const categoryName = item.product.category || "Khác";
+        const existingCat = acc.find((c) => c.name === categoryName);
+        const revenue = item.priceAtOrder * item.quantity;
+        const count = item.quantity;
+
+        if (existingCat) {
+          existingCat.revenue += revenue;
+          existingCat.count += count;
+        } else {
+          acc.push({ name: categoryName, revenue, count });
+        }
+      });
 
       return acc;
     },

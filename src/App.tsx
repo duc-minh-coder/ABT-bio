@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AppRole,
+  Category,
   Product,
   CartItem,
   Order,
@@ -9,12 +10,28 @@ import {
   UserAccount,
   Post,
 } from "./types";
+import { MOCK_POSTS } from "./data";
 import {
-  BIOMEDICAL_PRODUCTS,
-  MOCK_ORDERS,
-  MOCK_USERS,
-  MOCK_POSTS,
-} from "./data";
+  addCartItem,
+  checkoutCart,
+  clearStoredAuthTokens,
+  createAdminProduct,
+  createCategory,
+  updateAdminProduct,
+  deleteCategory,
+  getCurrentUser,
+  getStoredAuthTokens,
+  getCart,
+  listAdminUsers,
+  listCategories,
+  listOrders,
+  listProducts,
+  loginUser,
+  registerUser,
+  removeCartItem,
+  setStoredAuthTokens,
+  updateCategory,
+} from "./api";
 import Header from "./app/(user)/Header";
 import HomeView from "./app/(user)/HomeView";
 import ProductsView from "./app/(user)/ProductsView";
@@ -48,30 +65,9 @@ import {
 
 export default function App() {
   // 1. Session State Variables
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem("abt_current_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-  const [users, setUsers] = useState<UserAccount[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_users");
-      return saved ? JSON.parse(saved) : MOCK_USERS;
-    } catch (e) {
-      return MOCK_USERS;
-    }
-  });
-  const [posts, setPosts] = useState<Post[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_posts");
-      return saved ? JSON.parse(saved) : MOCK_POSTS;
-    } catch (e) {
-      return MOCK_POSTS;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
 
   // 2. Simulated Routing paths
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -106,59 +102,11 @@ export default function App() {
   }, []);
 
   // 3. E-commerce Stock, Cart & Orders States
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_products");
-      return saved ? JSON.parse(saved) : BIOMEDICAL_PRODUCTS;
-    } catch (e) {
-      return BIOMEDICAL_PRODUCTS;
-    }
-  });
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_cart_items");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_orders");
-      return saved ? JSON.parse(saved) : MOCK_ORDERS;
-    } catch (e) {
-      return MOCK_ORDERS;
-    }
-  });
-
-  // Keep states synchronized with localStorage
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem("abt_current_user", JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem("abt_current_user");
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_users", JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_posts", JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_products", JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_cart_items", JSON.stringify(cartItems));
-  }, [cartItems]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_orders", JSON.stringify(orders));
-  }, [orders]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [discountRate, setDiscountRate] = useState<number>(0);
   const [selectedProductDetail, setSelectedProductDetail] =
     useState<Product | null>(null);
@@ -181,8 +129,76 @@ export default function App() {
     }, 4000);
   };
 
+  useEffect(() => {
+    const hydrateCurrentUser = async () => {
+      if (currentUser) {
+        return;
+      }
+      const { token } = getStoredAuthTokens();
+      if (!token) {
+        return;
+      }
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+      } catch {
+        clearStoredAuthTokens();
+      }
+    };
+    hydrateCurrentUser();
+  }, [currentUser]);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const [apiProducts, apiCategories, apiUsers] = await Promise.all([
+          listProducts(),
+          listCategories(),
+          currentUser?.role === "admin"
+            ? listAdminUsers()
+            : Promise.resolve([]),
+        ]);
+
+        if (apiProducts.length > 0) {
+          setProducts(apiProducts);
+        }
+        if (apiCategories.length > 0) {
+          const categoryNames = apiCategories.map((category) => category.name);
+          setCategories(categoryNames);
+          setCategoryOptions(apiCategories);
+        }
+        if (apiUsers.length > 0) {
+          setUsers(apiUsers);
+        }
+      } catch {
+        // ignore if API is unavailable
+      }
+
+      if (!currentUser) {
+        return;
+      }
+
+      try {
+        const [serverCart, serverOrders] = await Promise.all([
+          getCart(),
+          listOrders(),
+        ]);
+        if (serverCart.length > 0) {
+          setCartItems(serverCart);
+        }
+        if (serverOrders.length > 0) {
+          setOrders(serverOrders);
+        }
+      } catch {
+        // ignore if API is unavailable
+      }
+    };
+
+    loadInitialData();
+  }, [currentUser]);
+
   // Add Item to Lab Cart
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = async (product: Product) => {
     const existing = cartItems.find((item) => item.product.id === product.id);
     const count = existing ? existing.quantity : 0;
 
@@ -194,34 +210,83 @@ export default function App() {
       return;
     }
 
-    if (existing) {
-      setCartItems(
-        cartItems.map((item) =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        ),
-      );
-    } else {
-      setCartItems([...cartItems, { product, quantity: 1 }]);
+    try {
+      const nextCart = await addCartItem(product.id, 1);
+      setCartItems(nextCart);
+      showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
+    } catch (error) {
+      if (existing) {
+        setCartItems(
+          cartItems.map((item) =>
+            item.product.id === product.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item,
+          ),
+        );
+      } else {
+        setCartItems([...cartItems, { product, quantity: 1 }]);
+      }
+      showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
     }
-    showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
   };
 
   // Update Cart quantities
-  const handleUpdateQuantity = (productId: string, delta: number) => {
+  const handleUpdateQuantity = async (productId: string, delta: number) => {
+    const targetItem = cartItems.find((item) => item.product.id === productId);
+    if (!targetItem) {
+      return;
+    }
+
+    const nextVal = targetItem.quantity + delta;
+    const maxVal = targetItem.product.stock;
+    if (nextVal > maxVal) {
+      showToast(
+        `Vượt quá trữ lượng khả dụng (${maxVal} ${targetItem.product.unit})`,
+        "error",
+      );
+      return;
+    }
+
+    if (delta > 0) {
+      try {
+        const nextCart = await addCartItem(productId, 1);
+        setCartItems(nextCart);
+        return;
+      } catch {
+        setCartItems(
+          cartItems.map((item) => {
+            if (item.product.id === productId) {
+              return { ...item, quantity: Math.max(1, nextVal) };
+            }
+            return item;
+          }),
+        );
+      }
+    }
+
+    if (nextVal <= 0) {
+      const index = cartItems.findIndex(
+        (item) => item.product.id === productId,
+      );
+      if (index >= 0) {
+        try {
+          const nextCart = await removeCartItem(index);
+          setCartItems(nextCart);
+          showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+          return;
+        } catch {
+          setCartItems(
+            cartItems.filter((item) => item.product.id !== productId),
+          );
+          showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+          return;
+        }
+      }
+    }
+
     setCartItems(
       cartItems.map((item) => {
         if (item.product.id === productId) {
-          const nextVal = item.quantity + delta;
-          const maxVal = item.product.stock;
-          if (nextVal > maxVal) {
-            showToast(
-              `Vượt quá trữ lượng khả dụng (${maxVal} ${item.product.unit})`,
-              "error",
-            );
-            return item;
-          }
           return { ...item, quantity: Math.max(1, nextVal) };
         }
         return item;
@@ -230,34 +295,86 @@ export default function App() {
   };
 
   // Remove Item
-  const handleRemoveItem = (productId: string) => {
-    setCartItems(cartItems.filter((item) => item.product.id !== productId));
-    showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+  const handleRemoveItem = async (productId: string) => {
+    const existing = cartItems.find((item) => item.product.id === productId);
+    if (!existing) {
+      return;
+    }
+
+    try {
+      const nextCart = await removeCartItem(productId);
+      setCartItems(nextCart);
+      showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+    } catch {
+      setCartItems(cartItems.filter((item) => item.product.id !== productId));
+      showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+    }
   };
 
   // Confirm order & sync to local state
-  const handlePlaceOrder = (newOrder: Order) => {
-    setOrders([newOrder, ...orders]);
+  const handlePlaceOrder = async (newOrder: Order) => {
+    try {
+      const createdOrder = await checkoutCart({
+        customerName: newOrder.customerName,
+        email: newOrder.email,
+        phone: newOrder.phone,
+        address: newOrder.address,
+        organization: newOrder.organization,
+        paymentMethod: newOrder.paymentMethod,
+        items: newOrder.items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          priceAtOrder: item.priceAtOrder,
+        })),
+        total: newOrder.total,
+        notes: newOrder.notes,
+      });
+      setOrders([createdOrder, ...orders]);
 
-    // Deduct stock for products ordered
-    const updatedProducts = products.map((prod) => {
-      const orderItem = newOrder.items.find((it) => it.product.id === prod.id);
-      if (orderItem) {
-        return {
-          ...prod,
-          stock: Math.max(0, prod.stock - orderItem.quantity),
-        };
-      }
-      return prod;
-    });
+      const updatedProducts = products.map((prod) => {
+        const orderItem = createdOrder.items.find(
+          (it) => it.product.id === prod.id,
+        );
+        if (orderItem) {
+          return {
+            ...prod,
+            stock: Math.max(0, prod.stock - orderItem.quantity),
+          };
+        }
+        return prod;
+      });
 
-    setProducts(updatedProducts);
-    setSelectedProductDetail(null);
-    showToast(
-      `Đơn hàng ${newOrder.id} đã hoàn thành thủ tục đăng ký!`,
-      "success",
-    );
-    onNavigate("/orders");
+      setProducts(updatedProducts);
+      setSelectedProductDetail(null);
+      setCartItems([]);
+      showToast(
+        `Đơn hàng ${createdOrder.id} đã hoàn thành thủ tục đăng ký!`,
+        "success",
+      );
+      onNavigate("/orders");
+    } catch (error) {
+      setOrders([newOrder, ...orders]);
+      const updatedProducts = products.map((prod) => {
+        const orderItem = newOrder.items.find(
+          (it) => it.product.id === prod.id,
+        );
+        if (orderItem) {
+          return {
+            ...prod,
+            stock: Math.max(0, prod.stock - orderItem.quantity),
+          };
+        }
+        return prod;
+      });
+      setProducts(updatedProducts);
+      setSelectedProductDetail(null);
+      setCartItems([]);
+      showToast(
+        error instanceof Error ? error.message : "Tạo đơn hàng thất bại.",
+        "error",
+      );
+      onNavigate("/orders");
+    }
   };
 
   // Admin routing updates
@@ -291,6 +408,151 @@ export default function App() {
     );
   };
 
+  const handleCreateProduct = async (payload: {
+    name: string;
+    slug: string;
+    detailedDescription: string;
+    thumbnailUrl: string;
+    galleryUrls: string[];
+    categoryId: number;
+    inventoryCount: number;
+    amount: number;
+    originalAmount: number;
+    currency: string;
+    supportEmail: string;
+    supportTelegram: string;
+  }) => {
+    try {
+      const createdProduct = await createAdminProduct(payload);
+      setProducts((prev) => [createdProduct, ...prev]);
+      const matchedCategory = categoryOptions.find(
+        (category) => category.id === String(payload.categoryId),
+      );
+      if (matchedCategory && !categories.includes(matchedCategory.name)) {
+        setCategories((prev) => [...prev, matchedCategory.name]);
+        setCategoryOptions((prev) =>
+          prev.some((category) => category.id === matchedCategory.id)
+            ? prev
+            : [...prev, matchedCategory],
+        );
+      }
+      showToast(`Đã tạo sản phẩm mới: ${createdProduct.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Tạo sản phẩm thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleUpdateProduct = async (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      detailedDescription: string;
+      thumbnailUrl: string;
+      galleryUrls: string[];
+      categoryId: number;
+      inventoryCount: number;
+      amount: number;
+      originalAmount: number;
+      currency: string;
+      supportEmail: string;
+      supportTelegram: string;
+    },
+  ) => {
+    try {
+      const updatedProduct = await updateAdminProduct(id, payload);
+      setProducts((prev) =>
+        prev.map((product) =>
+          product.id === String(id) ? updatedProduct : product,
+        ),
+      );
+      const matchedCategory = categoryOptions.find(
+        (category) => category.id === String(payload.categoryId),
+      );
+      if (matchedCategory && !categories.includes(matchedCategory.name)) {
+        setCategories((prev) => [...prev, matchedCategory.name]);
+        setCategoryOptions((prev) =>
+          prev.some((category) => category.id === matchedCategory.id)
+            ? prev
+            : [...prev, matchedCategory],
+        );
+      }
+      showToast(`Đã cập nhật sản phẩm: ${updatedProduct.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Cập nhật sản phẩm thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleCreateCategory = async (payload: {
+    name: string;
+    slug: string;
+    image?: string;
+    description?: string;
+    status?: string;
+  }) => {
+    try {
+      const createdCategory = await createCategory(payload);
+      const nextCategoryOptions = [createdCategory, ...categoryOptions];
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast(`Đã tạo danh mục mới: ${createdCategory.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Tạo danh mục thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleUpdateCategory = async (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      image?: string;
+      description?: string;
+      status?: string;
+    },
+  ) => {
+    try {
+      const updatedCategory = await updateCategory(id, payload);
+      const nextCategoryOptions = categoryOptions.map((category) =>
+        category.id === String(id) ? updatedCategory : category,
+      );
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast(`Đã cập nhật danh mục: ${updatedCategory.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Cập nhật danh mục thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleDeleteCategory = async (id: string | number) => {
+    try {
+      await deleteCategory(id);
+      const nextCategoryOptions = categoryOptions.filter(
+        (category) => category.id !== String(id),
+      );
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast("Đã xóa danh mục thành công.", "info");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Xóa danh mục thất bại.",
+        "error",
+      );
+    }
+  };
+
   // Admin restock simulation
   const handleRestockProduct = (productId: string, amount: number) => {
     setProducts(
@@ -320,8 +582,6 @@ export default function App() {
     setCurrentUser(user);
     showToast(`Đăng nhập thành công! Xin chào ${user.name}`, "success");
 
-    // Redirect cleanly according to role as requested:
-    // "t muốn khi đăng nhập thì sẽ vào trang khác nhau theo từng role"
     if (user.role === "admin") {
       onNavigate("/admin/dashboard");
     } else {
@@ -339,6 +599,7 @@ export default function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    clearStoredAuthTokens();
     showToast(`Đã đăng xuất khỏi hệ thống ABT.`, "info");
     onNavigate("/login");
   };
@@ -380,7 +641,8 @@ export default function App() {
   // Filter personal orders
   // "còn user sẽ có các chức năng... xem orders của bản thân"
   const personalOrders = orders.filter((o) => {
-    if (!currentUser) return false;
+    if (!currentUser) 
+      return false;
     // Match by email
     return o.email.toLowerCase() === currentUser.email.toLowerCase();
   });
@@ -420,6 +682,7 @@ export default function App() {
             {/* PATH: /home */}
             {currentPath === "/home" && (
               <HomeView
+                products={products}
                 onExploreProducts={() => onNavigate("/products")}
                 onAddToCart={handleAddToCart}
                 onViewProductDetail={(p) => {
@@ -432,6 +695,8 @@ export default function App() {
             {/* PATH: /products */}
             {currentPath === "/products" && (
               <ProductsView
+                products={products}
+                categories={categories}
                 onAddToCart={handleAddToCart}
                 selectedProductDetail={selectedProductDetail}
                 onSetSelectedProductDetail={setSelectedProductDetail}
@@ -565,7 +830,13 @@ export default function App() {
                   orders={orders}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   products={products}
+                  categories={categoryOptions}
                   onRestockProduct={handleRestockProduct}
+                  onCreateProduct={handleCreateProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onCreateCategory={handleCreateCategory}
+                  onUpdateCategory={handleUpdateCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   users={users}
                   onUpdateUserRole={handleUpdateUserRole}
                   onUpdateUserStatus={handleUpdateUserStatus}
