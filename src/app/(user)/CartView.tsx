@@ -28,7 +28,7 @@ export default function CartView({
   // Calculations
   const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const discountAmount = subtotal * discountRate;
-  const shippingFee = subtotal > 100000000 ? 0 : 500000; // Free shipping above 100M VND
+  const shippingFee = 0; // Free shipping above 100M VND
   const total = subtotal - discountAmount + shippingFee;
 
   const handleApplyPromo = () => {

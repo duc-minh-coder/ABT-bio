@@ -459,8 +459,8 @@ export async function addCartItem(
   return normalizePage<CartPayload>(response.result, toCartItem);
 }
 
-export async function removeCartItem(itemIndex: number) {
-  const response = await requestJson<unknown>(`/cart/${itemIndex}`, {
+export async function removeCartItem(productId: number | string) {
+  const response = await requestJson<unknown>(`/cart/product/${productId}`, {
     method: "DELETE",
   });
   return normalizePage<CartPayload>(response.result, toCartItem);

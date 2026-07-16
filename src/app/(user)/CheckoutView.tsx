@@ -80,7 +80,7 @@ export default function CheckoutView({
     0,
   );
   const discountAmount = subtotal * discountRate;
-  const shippingFee = subtotal > 100000000 ? 0 : 500000;
+  const shippingFee = 0;
   const total = subtotal - discountAmount + shippingFee;
 
   const validateForm = () => {

@@ -296,18 +296,19 @@ export default function App() {
 
   // Remove Item
   const handleRemoveItem = async (productId: string) => {
-    const index = cartItems.findIndex((item) => item.product.id === productId);
-    if (index < 0) {
+    const existing = cartItems.find((item) => item.product.id === productId);
+    if (!existing) {
       return;
     }
 
     try {
-      const nextCart = await removeCartItem(index);
+      const nextCart = await removeCartItem(productId);
       setCartItems(nextCart);
+      showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
     } catch {
       setCartItems(cartItems.filter((item) => item.product.id !== productId));
+      showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
     }
-    showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
   };
 
   // Confirm order & sync to local state
