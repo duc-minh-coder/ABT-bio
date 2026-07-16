@@ -123,9 +123,7 @@ export default function AdminDashboard({
       productCount={products.length}
       onNavigate={onNavigate}
     >
-      {section === "orders" && (
-        <AdminOrderList />
-      )}
+      {section === "orders" && <AdminOrderList />}
       {section === "users" && (
         <AdminUsersPanel
           users={users}

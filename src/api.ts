@@ -68,6 +68,8 @@ type OrderPayload = {
   id?: string;
   date?: string;
   customerName?: string;
+  customerEmail?: string;
+  contactEmail?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -82,6 +84,18 @@ type OrderPayload = {
   total?: number | string;
   paymentStatus?: string;
   notes?: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    organization?: string;
+  };
+  user?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    organization?: string;
+  };
 };
 
 type CategoryPayload = {
@@ -261,14 +275,34 @@ function toPaymentStatus(status?: string): Order["paymentStatus"] {
 }
 
 function toOrder(payload?: OrderPayload | null): Order {
+  const normalizedEmail =
+    payload?.email ??
+    payload?.customerEmail ??
+    payload?.contactEmail ??
+    payload?.customer?.email ??
+    payload?.user?.email ??
+    "";
+  const normalizedCustomerName =
+    payload?.customerName ??
+    payload?.customer?.name ??
+    payload?.user?.name ??
+    "";
+  const normalizedPhone =
+    payload?.phone ?? payload?.customer?.phone ?? payload?.user?.phone ?? "";
+  const normalizedOrganization =
+    payload?.organization ??
+    payload?.customer?.organization ??
+    payload?.user?.organization ??
+    "";
+
   return {
     id: payload?.id ?? `DH-${Date.now()}`,
     date: payload?.date ?? new Date().toISOString(),
-    customerName: payload?.customerName ?? "",
-    email: payload?.email ?? "",
-    phone: payload?.phone ?? "",
+    customerName: normalizedCustomerName,
+    email: normalizedEmail,
+    phone: normalizedPhone,
     address: payload?.address ?? "",
-    organization: payload?.organization ?? "",
+    organization: normalizedOrganization,
     paymentMethod:
       payload?.paymentMethod === "paypal"
         ? "paypal"
@@ -489,7 +523,23 @@ export async function checkoutCart(payload: {
 }
 
 export async function listOrders() {
-  const response = await requestJson<unknown>("/orders/completed?page=0&size=20");
+  const response = await requestJson<unknown>(
+    "/orders/completed?page=0&size=20",
+  );
+  return normalizePage<OrderPayload>(response.result, toOrder);
+}
+
+export async function listMyCompletedOrders(page = 0, size = 20) {
+  const response = await requestJson<unknown>(
+    `/my-completed?page=${page}&size=${size}`,
+  );
+  return normalizePage<OrderPayload>(response.result, toOrder);
+}
+
+export async function listAdminCompletedOrders(page = 0, size = 20) {
+  const response = await requestJson<unknown>(
+    `/admin/completed?page=${page}&size=${size}`,
+  );
   return normalizePage<OrderPayload>(response.result, toOrder);
 }
 

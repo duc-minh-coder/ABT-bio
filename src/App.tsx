@@ -641,7 +641,8 @@ export default function App() {
   // Filter personal orders
   // "còn user sẽ có các chức năng... xem orders của bản thân"
   const personalOrders = orders.filter((o) => {
-    if (!currentUser) return false;
+    if (!currentUser) 
+      return false;
     // Match by email
     return o.email.toLowerCase() === currentUser.email.toLowerCase();
   });
