@@ -26,6 +26,7 @@ type CreateQrResponse = {
   qrCode?: string;
   transactionId?: string;
   paymentUrl?: string;
+  checkoutUrl?: string;
 };
 
 const API_BASE = "/api";
@@ -67,6 +68,12 @@ function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function toQrImageUrl(rawValue?: string | null) {
+  if (!rawValue) return null;
+  if (/^https?:\/\//i.test(rawValue)) return rawValue;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(rawValue)}`;
 }
 
 export default function CheckoutPayment({
@@ -111,7 +118,10 @@ export default function CheckoutPayment({
     try {
       setLoading(true);
       setError(null);
-      const data = await requestJson("/cart/checkout", { method: "POST", body: JSON.stringify({}) });
+      const data = await requestJson("/cart/checkout", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
       const nextOrder = {
         id: data?.id || data?.orderId || "",
         totalAmount: data?.totalAmount ?? totalAmount,
@@ -138,7 +148,9 @@ export default function CheckoutPayment({
       });
 
       const payload = data?.result ?? data;
-      const nextQrUrl = payload?.qrCode || payload?.paymentUrl || null;
+      const rawQr =
+        payload?.qrCode || payload?.paymentUrl || payload?.checkoutUrl || null;
+      const nextQrUrl = toQrImageUrl(rawQr);
       const nextTransactionId = payload?.transactionId || null;
 
       setQrUrl(nextQrUrl);
@@ -277,10 +289,16 @@ export default function CheckoutPayment({
               Đơn hàng đã được tạo
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Mã đơn hàng: <span className="font-semibold">{order?.id || order?.orderCode || "--"}</span>
+              Mã đơn hàng:{" "}
+              <span className="font-semibold">
+                {order?.id || order?.orderCode || "--"}
+              </span>
             </p>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Tổng cần thanh toán: <span className="font-semibold">{(order?.totalAmount ?? totalAmount).toLocaleString("vi-VN")}₫</span>
+              Tổng cần thanh toán:{" "}
+              <span className="font-semibold">
+                {(order?.totalAmount ?? totalAmount).toLocaleString("vi-VN")}₫
+              </span>
             </p>
           </div>
 
@@ -305,7 +323,9 @@ export default function CheckoutPayment({
               Thời gian còn lại
             </div>
             <div className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-              Lưu ý: Đơn hàng sẽ bị hủy và hoàn trả sản phẩm về kho sau 5 phút. Vui lòng không chuyển khoản khi thời gian đếm ngược đã kết thúc để tránh mất tiền oan!
+              Lưu ý: Đơn hàng sẽ bị hủy và hoàn trả sản phẩm về kho sau 5 phút.
+              Vui lòng không chuyển khoản khi thời gian đếm ngược đã kết thúc để
+              tránh mất tiền oan!
             </div>
           </div>
 
@@ -331,7 +351,8 @@ export default function CheckoutPayment({
             Thanh toán thành công!
           </h2>
           <p className="mt-3 text-sm text-emerald-700/80 dark:text-emerald-300/80">
-            Đơn hàng của bạn đã được xác nhận. Bạn sẽ được chuyển sang trang thanh toán thành công.
+            Đơn hàng của bạn đã được xác nhận. Bạn sẽ được chuyển sang trang
+            thanh toán thành công.
           </p>
           <a
             href="/thanh-toan-thanh-cong"

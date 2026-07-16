@@ -1,6 +1,7 @@
 import React from "react";
 import AdminLayout from "./AdminLayout";
 import AdminOrdersPanel from "./AdminOrdersPanel";
+import AdminOrderList from "./AdminOrderList";
 import AdminUsersPanel from "./AdminUsersPanel";
 import AdminPostsPanel from "./AdminPostsPanel";
 import AdminStockPanel from "./AdminStockPanel";
@@ -123,10 +124,7 @@ export default function AdminDashboard({
       onNavigate={onNavigate}
     >
       {section === "orders" && (
-        <AdminOrdersPanel
-          orders={orders}
-          onUpdateOrderStatus={onUpdateOrderStatus}
-        />
+        <AdminOrderList />
       )}
       {section === "users" && (
         <AdminUsersPanel

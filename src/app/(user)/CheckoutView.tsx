@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { CartItem, Order, OrderStatus } from "../../types";
 import {
   CreditCard,
@@ -29,6 +29,70 @@ interface CheckoutViewProps {
   initialCustomerName?: string;
   initialEmail?: string;
   initialOrg?: string;
+}
+
+type ApiEnvelope<T> = {
+  code?: number;
+  result?: T;
+  message?: string;
+};
+
+type CheckoutOrderResponse = {
+  id?: string;
+  totalAmount?: number;
+};
+
+type PayosCreateResponse = {
+  qrCode?: string;
+  transactionId?: string;
+  checkoutUrl?: string;
+};
+
+const API_BASE = "/api";
+
+function getAuthHeaders(includeJson = true) {
+  const headers = new Headers();
+  if (includeJson) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const token = localStorage.getItem("abt_access_token");
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return headers;
+}
+
+async function requestJson<T>(path: string, init: RequestInit = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...Object.fromEntries(getAuthHeaders(Boolean(init.body)).entries()),
+      ...(init.headers || {}),
+    },
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    throw new Error(data?.message || "Yêu cầu thất bại.");
+  }
+
+  return data as ApiEnvelope<T>;
+}
+
+function formatTime(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function toQrImageUrl(rawValue?: string | null) {
+  if (!rawValue) return null;
+  if (/^https?:\/\//i.test(rawValue)) return rawValue;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(rawValue)}`;
 }
 
 export default function CheckoutView({
@@ -73,6 +137,14 @@ export default function CheckoutView({
   const [paypalCardExp, setPaypalCardExp] = useState("");
   const [paypalCardCvv, setPaypalCardCvv] = useState("");
   const [isCopied, setIsCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [payosQr, setPayosQr] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(300);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const countdownRef = useRef<number | null>(null);
+  const pollingRef = useRef<number | null>(null);
+  const expiredRef = useRef(false);
 
   // Calculations
   const subtotal = cartItems.reduce(
@@ -82,6 +154,23 @@ export default function CheckoutView({
   const discountAmount = subtotal * discountRate;
   const shippingFee = 0;
   const total = subtotal - discountAmount + shippingFee;
+
+  const clearTimers = () => {
+    if (countdownRef.current) {
+      window.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (pollingRef.current) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+    };
+  }, []);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -99,56 +188,117 @@ export default function CheckoutView({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleStartPayment = (e: React.FormEvent) => {
+  const startPolling = (txId: string | null) => {
+    clearTimers();
+
+    countdownRef.current = window.setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearTimers();
+          expiredRef.current = true;
+          setPayosQr(null);
+          setPaymentError("Đơn hàng đã hết hạn thanh toán.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    if (!txId) return;
+
+    pollingRef.current = window.setInterval(async () => {
+      if (expiredRef.current) return;
+      try {
+        const data = await requestJson<string>(`/payments/status/${txId}`);
+        const status = (data?.result ?? "").toString().toUpperCase();
+        if (status === "PAID") {
+          clearTimers();
+          setGatewayStatus("success");
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 5000);
+  };
+
+  const handleStartPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    // Generate a beautiful unique order id
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderId = `DH-${randomSuffix}-ABT`;
-    setGeneratedOrderId(orderId);
+    try {
+      setLoading(true);
+      setPaymentError(null);
+      setGatewayStatus("processing");
 
-    setGatewayStatus("processing");
+      const data = await requestJson<CheckoutOrderResponse>("/cart/checkout", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
 
-    // Simulate connection delay
-    setTimeout(() => {
+      const nextOrderId = data?.result?.id || "";
+      if (!nextOrderId) {
+        throw new Error("Backend không trả về orderId.");
+      }
+
+      setGeneratedOrderId(nextOrderId);
+
       if (paymentMethod === "payos") {
+        const qrData = await requestJson<PayosCreateResponse>(
+          "/payments/payos/create",
+          {
+            method: "POST",
+            body: JSON.stringify({ orderId: nextOrderId }),
+          },
+        );
+
+        const rawQr =
+          qrData?.result?.qrCode || qrData?.result?.checkoutUrl || null;
+        const txId = qrData?.result?.transactionId || null;
+        setPayosQr(toQrImageUrl(rawQr));
+        setTransactionId(txId);
+        setCountdown(300);
+        expiredRef.current = false;
         setGatewayStatus("payos_screen");
+        startPolling(txId);
       } else {
         setGatewayStatus("paypal_screen");
       }
-    }, 1500);
+    } catch (err) {
+      setPaymentError(
+        err instanceof Error ? err.message : "Không thể khởi tạo thanh toán.",
+      );
+      setGatewayStatus("form");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSimulateSuccessfulPayment = (isSuccessPay: boolean) => {
-    setGatewayStatus("processing");
+  const handleConfirmOrderSuccess = async () => {
+    if (!generatedOrderId) return;
 
-    setTimeout(async () => {
-      // Build final order payload
-      const orderPayload: Order = {
-        id: generatedOrderId,
-        date: new Date().toISOString(),
-        customerName,
-        email,
-        phone,
-        address,
-        organization,
-        paymentMethod,
-        items: cartItems.map((item) => ({
-          product: item.product,
-          quantity: item.quantity,
-          priceAtOrder: item.product.price,
-        })),
-        status: isSuccessPay ? "paid" : "pending_payment",
-        total,
-        paymentStatus: isSuccessPay ? "paid" : "unpaid",
-        notes: notes.trim() !== "" ? notes : undefined,
-      };
+    const orderPayload: Order = {
+      id: generatedOrderId,
+      date: new Date().toISOString(),
+      customerName,
+      email,
+      phone,
+      address,
+      organization,
+      paymentMethod,
+      items: cartItems.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+        priceAtOrder: item.product.price,
+      })),
+      status: "pending_payment",
+      total,
+      paymentStatus: "unpaid",
+      notes: notes.trim() !== "" ? notes : undefined,
+    };
 
-      await onPlaceOrder(orderPayload);
-      onClearCart();
-      setGatewayStatus("success");
-    }, 2000);
+    await onPlaceOrder(orderPayload);
+    onClearCart();
+    setGatewayStatus("success");
   };
 
   const copyToClipboard = (text: string) => {
@@ -157,15 +307,10 @@ export default function CheckoutView({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  // VietQR generation payload parameters
-  const bankCode = "ACB";
-  const accNo = "99823456789";
-  const accName = "CONG TY TNHH THIET BI Y SINH ABT VIET NAM";
-  // Encode content for VietQR
-  const contentStr = `THANH TOAN DON HANG ${generatedOrderId}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=0c4a6e&data=${encodeURIComponent(
-    `2400=Bank: ${bankCode}, Acc: ${accNo}, Name: ${accName}, Amount: ${total}, Note: ${contentStr}`,
-  )}`;
+  useEffect(() => {
+    if (gatewayStatus !== "success") return;
+    void handleConfirmOrderSuccess();
+  }, [gatewayStatus]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 space-y-8">
@@ -186,17 +331,22 @@ export default function CheckoutView({
           <Loader2 className="h-12 w-12 text-cyan-400 animate-spin" />
           <div className="space-y-1">
             <h3 className="font-bold text-lg text-white">
-              Đang kết nối cổng thanh toán...
+              Đang tạo đơn hàng và kết nối cổng thanh toán...
             </h3>
             <p className="text-xs text-slate-400 max-w-xs mx-auto">
-              Vui lòng chờ trong giây lát để hệ thống khởi tạo phiên giao thức
-              bảo mật với PayOS / PayPal.
+              Hệ thống đang gọi API thật để tạo order và lấy QR PayOS.
             </p>
           </div>
         </div>
       )}
 
       {/* 3. SIMULATED FORM VIEW */}
+      {paymentError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+          {paymentError}
+        </div>
+      )}
+
       {gatewayStatus === "form" && (
         <div className="grid lg:grid-cols-12 gap-8 items-start">
           {/* Customer / Institution Form details */}
@@ -531,165 +681,81 @@ export default function CheckoutView({
         </div>
       )}
 
-      {/* 5. PORTAL_SIMULATOR PRE-PAGE: PayOS VietQR Screen */}
       {gatewayStatus === "payos_screen" && (
         <div className="max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl text-slate-200">
-          {/* Header Gateway brand */}
-          <div className="bg-gradient-to-r from-cyan-900 via-sky-850 to-slate-900 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-cyan-800/10">
+          <div className="bg-gradient-to-r from-cyan-900 via-sky-800 to-slate-900 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-cyan-800/10">
             <div className="flex items-center gap-3">
               <CloudLightning className="h-8 w-8 text-cyan-400 animate-pulse" />
               <div className="text-left">
                 <span className="text-xs uppercase font-bold tracking-widest text-cyan-400 font-mono">
-                  Cổng thanh toán quốc gia
+                  Cổng thanh toán PayOS
                 </span>
                 <h2 className="text-lg font-black text-white font-sans">
-                  MÔ PHỎNG PAYOS GATEWAY
+                  Quét mã QR để thanh toán
                 </h2>
               </div>
             </div>
 
-            {/* Dynamic visual badge */}
             <div className="bg-cyan-500/10 border border-cyan-400/50 px-3 py-1.5 rounded-xl font-mono text-xs text-cyan-400">
               ĐƠN HÀNG: {generatedOrderId}
             </div>
           </div>
 
-          <div className="grid md:grid-cols-12 gap-8 p-6 sm:p-8">
-            {/* Left: VietQR mock code image with instructions */}
-            <div className="md:col-span-5 flex flex-col items-center justify-center space-y-4">
-              <div className="p-4 bg-white rounded-2xl shadow-xl flex flex-col items-center border border-slate-200 max-w-[240px]">
-                <span className="text-[10px] text-cyan-900 font-bold tracking-widest uppercase font-mono mb-2">
-                  VietQR Quét Mã Trả Tiền
-                </span>
-                <img
-                  src={qrUrl}
-                  alt="Mã QR PayOS ABT"
-                  className="w-48 h-48 block object-contain"
-                />
-                <span className="text-[9px] text-slate-400 font-mono text-center mt-2">
-                  Dùng máy ảnh điện thoại quét mã để thanh toán tức thì qua
-                  VNPay/mBanking
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  id="payos-download-qr-btn"
-                  onClick={() => alert("Mô phỏng: Đã lưu ảnh VietQR vào máy!")}
-                  className="px-3 py-1.5 rounded-lg bg-slate-950 font-semibold text-[10px] text-slate-300 hover:text-white flex items-center gap-1 border border-slate-800"
-                >
-                  <Download className="h-3 w-3" /> Tải mã về máy
-                </button>
-              </div>
+          <div className="p-6 sm:p-8 space-y-6 text-left">
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-300">
+              Thời gian giữ QR: {formatTime(countdown)} • Hệ thống sẽ tự động
+              xác nhận khi giao dịch được thanh toán.
             </div>
 
-            {/* Right: Analytical Bank Details */}
-            <div className="md:col-span-7 text-left space-y-4.5">
-              <div className="p-3 bg-cyan-950/20 border border-cyan-800/20 rounded-xl space-y-1">
-                <span className="text-[10px] text-slate-405 text-slate-400 uppercase">
-                  SỐ TIỀN CẦN CHUYỂN:
-                </span>
-                <div className="text-2xl font-black text-cyan-400 font-mono">
-                  {total.toLocaleString("vi-VN")} VND
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 flex flex-col md:flex-row gap-6 items-center justify-center">
+              {payosQr ? (
+                <img
+                  src={payosQr}
+                  alt="Mã QR PayOS"
+                  className="w-60 h-60 rounded-2xl border border-slate-800 bg-white p-3 object-contain"
+                />
+              ) : (
+                <div className="w-60 h-60 rounded-2xl border border-dashed border-slate-700 flex items-center justify-center text-sm text-slate-400">
+                  QR đã hết hạn hoặc chưa được tạo.
                 </div>
-              </div>
-
-              <div className="space-y-3.5 text-xs">
-                {/* Bank */}
-                <div className="flex justify-between items-center sm:grid sm:grid-cols-12 gap-1 bg-slate-950 p-2.5 rounded-lg">
-                  <span className="text-slate-400 sm:col-span-4 font-mono uppercase tracking-wider text-[10px]">
-                    Ngân hàng thụ hưởng:
-                  </span>
-                  <span className="font-extrabold text-white sm:col-span-6">
-                    {bankCode} (Nội địa Việt Nam)
-                  </span>
-                  <button
-                    id="copy-bank"
-                    onClick={() => copyToClipboard(bankCode)}
-                    className="p-1 text-slate-400 hover:text-cyan-400 sm:col-span-2 flex justify-end"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {/* Account no. */}
-                <div className="flex justify-between items-center sm:grid sm:grid-cols-12 gap-1 bg-slate-950 p-2.5 rounded-lg">
-                  <span className="text-slate-400 sm:col-span-4 font-mono uppercase tracking-wider text-[10px]">
-                    Số tài khoản ABT:
-                  </span>
-                  <span className="font-extrabold text-white sm:col-span-6 font-mono text-sm">
-                    {accNo}
-                  </span>
-                  <button
-                    id="copy-acc"
-                    onClick={() => copyToClipboard(accNo)}
-                    className="p-1 text-slate-400 hover:text-cyan-400 sm:col-span-2 flex justify-end"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {/* Account Name */}
-                <div className="flex flex-col gap-1 bg-slate-950 p-2.5 rounded-lg text-left">
-                  <span className="text-slate-400 font-mono uppercase tracking-wider text-[10px]">
-                    Tên tài khoản thụ hưởng:
-                  </span>
-                  <span className="font-bold text-white text-[11px] leading-tight">
-                    {accName}
-                  </span>
-                </div>
-
-                {/* Content */}
-                <div className="flex justify-between items-center sm:grid sm:grid-cols-12 gap-1 bg-slate-950 p-2.5 rounded-lg">
-                  <span className="text-slate-400 sm:col-span-4 font-mono uppercase tracking-wider text-[10px]">
-                    Nội dung chuyển khoản:
-                  </span>
-                  <span className="font-black text-cyan-300 sm:col-span-6 font-mono">
-                    {contentStr}
-                  </span>
-                  <button
-                    id="copy-content"
-                    onClick={() => copyToClipboard(contentStr)}
-                    className="p-1 text-slate-400 hover:text-cyan-400 sm:col-span-2 flex justify-end"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {isCopied && (
-                <p className="text-[10px] text-emerald-400 text-center font-bold">
-                  ✓ Đã sao chép vào bộ nhớ tạm!
-                </p>
               )}
 
-              {/* Warning/Guide snippet related to webhook callback */}
-              <div className="p-3 bg-cyan-950/40 rounded-xl border border-cyan-800/20 text-[10px] text-slate-400 leading-tight">
-                Mô phỏng webhook: Khi bạn chuyển khoản thật, hệ thống PayOS gửi
-                thông báo về core Java Spring Boot của bạn để đối soát. Tại giao
-                diện kiểm thử này, bạn vui lòng nhấn nút bên dưới để mô phỏng sự
-                kiện webhook gửi về thành công cực kỳ trực quan!
+              <div className="space-y-4 max-w-md">
+                <div className="rounded-2xl bg-slate-900 p-4">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-400">
+                    Tổng tiền
+                  </div>
+                  <div className="text-xl font-bold mt-1 text-white">
+                    {total.toLocaleString("vi-VN")} đ
+                  </div>
+                </div>
+
+                <div className="text-sm text-slate-400 leading-relaxed">
+                  Mở ứng dụng ngân hàng, quét mã QR bên trái và xác nhận giao
+                  dịch. Hệ thống sẽ tự cập nhật trạng thái đơn hàng khi thanh
+                  toán thành công.
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => copyToClipboard(generatedOrderId)}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                  >
+                    <Copy className="h-4 w-4" />
+                    {isCopied ? "Đã copy" : "Copy mã đơn"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearTimers();
+                      setGatewayStatus("form");
+                    }}
+                    className="rounded-2xl border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                  >
+                    Quay lại
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Simulate checkout buttons */}
-          <div className="p-6 bg-slate-950 border-t border-slate-850 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <button
-              id="payos-simulate-fail-btn"
-              onClick={() => handleSimulateSuccessfulPayment(false)}
-              className="w-full sm:w-auto px-4 py-2.5 text-xs text-slate-400 hover:text-red-400 transition"
-            >
-              Thanh toán sau (Lưu đơn nháp "Chờ thanh toán")
-            </button>
-            <button
-              id="payos-simulate-success-btn"
-              onClick={() => handleSimulateSuccessfulPayment(true)}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-cyan-550 bg-cyan-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 className="h-4.5 w-4.5" />
-              [MÔ PHỎNG] Xác nhận đã thanh toán thành công qua PayOS
-            </button>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Order, OrderStatus } from '../../types';
+import OrderHistory from './OrderHistory';
 import { 
   ShoppingBag, 
   Clock, 
@@ -27,6 +28,10 @@ export default function OrdersView({
   onNavigateToTab
 }: OrdersViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const paidOrders = orders.filter((order) => {
+    const status = String(order.status).toUpperCase();
+    return status === 'PAID' || status === 'COMPLETED';
+  });
 
   const getStatusLabelAndColor = (status: OrderStatus) => {
     switch (status) {
@@ -62,7 +67,7 @@ export default function OrdersView({
     return { steps, activeIndex };
   };
 
-  if (orders.length === 0) {
+  if (paidOrders.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-6">
         <div className="mx-auto w-16 h-16 rounded-full bg-slate-105 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 flex items-center justify-center">
@@ -85,7 +90,7 @@ export default function OrdersView({
     );
   }
 
-  const selectedOrder = orders.find(o => o.id === selectedOrderId) || null;
+  const selectedOrder = paidOrders.find(o => o.id === selectedOrderId) || null;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 space-y-8">
@@ -99,10 +104,10 @@ export default function OrdersView({
         
         {/* Left Side: Order Listing Grid Cards */}
         <div className="lg:col-span-7 space-y-4">
-          <h3 className="text-sm font-bold text-slate-500 text-left font-mono uppercase tracking-wide">Danh sách đơn hàng ({orders.length})</h3>
+          <h3 className="text-sm font-bold text-slate-500 text-left font-mono uppercase tracking-wide">Danh sách đơn hàng ({paidOrders.length})</h3>
           
           <div className="space-y-4">
-            {orders.map((order) => {
+            {paidOrders.map((order) => {
               const statusMeta = getStatusLabelAndColor(order.status);
               const StatusIcon = statusMeta.icon;
               const isSelected = order.id === selectedOrderId;

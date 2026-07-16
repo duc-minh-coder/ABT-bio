@@ -489,7 +489,7 @@ export async function checkoutCart(payload: {
 }
 
 export async function listOrders() {
-  const response = await requestJson<unknown>("/orders?page=0&size=20");
+  const response = await requestJson<unknown>("/orders/completed?page=0&size=20");
   return normalizePage<OrderPayload>(response.result, toOrder);
 }
 

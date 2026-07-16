@@ -127,7 +127,8 @@ export default function CartPage({ className = "" }: CartPageProps) {
               Sản phẩm đã chọn
             </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Kiểm tra sản phẩm, số lượng và tổng tiền trước khi tiến hành thanh toán.
+              Kiểm tra sản phẩm, số lượng và tổng tiền trước khi tiến hành thanh
+              toán.
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950">
@@ -176,7 +177,8 @@ export default function CartPage({ className = "" }: CartPageProps) {
                       SL: {item.quantity}
                     </div>
                     <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {(item.unitPrice * item.quantity).toLocaleString("vi-VN")}₫
+                      {(item.unitPrice * item.quantity).toLocaleString("vi-VN")}
+                      ₫
                     </div>
                     <button
                       type="button"
