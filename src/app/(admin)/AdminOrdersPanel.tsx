@@ -72,27 +72,30 @@ export default function AdminOrdersPanel({
     (o) => o.status === "shipping",
   ).length;
 
-  const categorySales = orders.reduce((acc, order) => {
-    if (order.status === "cancelled") {
-      return acc;
-    }
-
-    order.items.forEach((item) => {
-      const categoryName = item.product.category || "Khác";
-      const existingCat = acc.find((c) => c.name === categoryName);
-      const revenue = item.priceAtOrder * item.quantity;
-      const count = item.quantity;
-
-      if (existingCat) {
-        existingCat.revenue += revenue;
-        existingCat.count += count;
-      } else {
-        acc.push({ name: categoryName, revenue, count });
+  const categorySales = orders.reduce(
+    (acc, order) => {
+      if (order.status === "cancelled") {
+        return acc;
       }
-    });
 
-    return acc;
-  }, [] as { name: string; revenue: number; count: number }[]);
+      order.items.forEach((item) => {
+        const categoryName = item.product.category || "Khác";
+        const existingCat = acc.find((c) => c.name === categoryName);
+        const revenue = item.priceAtOrder * item.quantity;
+        const count = item.quantity;
+
+        if (existingCat) {
+          existingCat.revenue += revenue;
+          existingCat.count += count;
+        } else {
+          acc.push({ name: categoryName, revenue, count });
+        }
+      });
+
+      return acc;
+    },
+    [] as { name: string; revenue: number; count: number }[],
+  );
 
   const highestCatRevenue = Math.max(...categorySales.map((c) => c.revenue), 1);
 

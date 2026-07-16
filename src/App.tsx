@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AppRole,
+  Category,
   Product,
   CartItem,
   Order,
@@ -14,6 +15,9 @@ import {
   addCartItem,
   checkoutCart,
   clearStoredAuthTokens,
+  createAdminProduct,
+  createCategory,
+  deleteCategory,
   getCurrentUser,
   getStoredAuthTokens,
   getCart,
@@ -25,6 +29,7 @@ import {
   registerUser,
   removeCartItem,
   setStoredAuthTokens,
+  updateCategory,
 } from "./api";
 import Header from "./app/(user)/Header";
 import HomeView from "./app/(user)/HomeView";
@@ -133,6 +138,14 @@ export default function App() {
       return [];
     }
   });
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>(() => {
+    try {
+      const saved = localStorage.getItem("abt_category_options");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem("abt_cart_items");
@@ -174,6 +187,13 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("abt_categories", JSON.stringify(categories));
   }, [categories]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "abt_category_options",
+      JSON.stringify(categoryOptions),
+    );
+  }, [categoryOptions]);
 
   useEffect(() => {
     localStorage.setItem("abt_cart_items", JSON.stringify(cartItems));
@@ -229,14 +249,18 @@ export default function App() {
         const [apiProducts, apiCategories, apiUsers] = await Promise.all([
           listProducts(),
           listCategories(),
-          currentUser?.role === "admin" ? listAdminUsers() : Promise.resolve([]),
+          currentUser?.role === "admin"
+            ? listAdminUsers()
+            : Promise.resolve([]),
         ]);
 
         if (apiProducts.length > 0) {
           setProducts(apiProducts);
         }
         if (apiCategories.length > 0) {
-          setCategories(apiCategories.map((category) => category.name));
+          const categoryNames = apiCategories.map((category) => category.name);
+          setCategories(categoryNames);
+          setCategoryOptions(apiCategories);
         }
         if (apiUsers.length > 0) {
           setUsers(apiUsers);
@@ -476,6 +500,107 @@ export default function App() {
       `Đơn hàng ${orderId} đã được hủy bỏ thành công theo yêu cầu`,
       "info",
     );
+  };
+
+  const handleCreateProduct = async (payload: {
+    name: string;
+    slug: string;
+    detailedDescription: string;
+    thumbnailUrl: string;
+    galleryUrls: string[];
+    categoryId: number;
+    inventoryCount: number;
+    amount: number;
+    originalAmount: number;
+    currency: string;
+    supportEmail: string;
+    supportTelegram: string;
+  }) => {
+    try {
+      const createdProduct = await createAdminProduct(payload);
+      setProducts((prev) => [createdProduct, ...prev]);
+      const matchedCategory = categoryOptions.find(
+        (category) => category.id === String(payload.categoryId),
+      );
+      if (matchedCategory && !categories.includes(matchedCategory.name)) {
+        setCategories((prev) => [...prev, matchedCategory.name]);
+        setCategoryOptions((prev) =>
+          prev.some((category) => category.id === matchedCategory.id)
+            ? prev
+            : [...prev, matchedCategory],
+        );
+      }
+      showToast(`Đã tạo sản phẩm mới: ${createdProduct.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Tạo sản phẩm thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleCreateCategory = async (payload: {
+    name: string;
+    slug: string;
+    image?: string;
+    description?: string;
+    status?: string;
+  }) => {
+    try {
+      const createdCategory = await createCategory(payload);
+      const nextCategoryOptions = [createdCategory, ...categoryOptions];
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast(`Đã tạo danh mục mới: ${createdCategory.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Tạo danh mục thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleUpdateCategory = async (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      image?: string;
+      description?: string;
+      status?: string;
+    },
+  ) => {
+    try {
+      const updatedCategory = await updateCategory(id, payload);
+      const nextCategoryOptions = categoryOptions.map((category) =>
+        category.id === String(id) ? updatedCategory : category,
+      );
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast(`Đã cập nhật danh mục: ${updatedCategory.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Cập nhật danh mục thất bại.",
+        "error",
+      );
+    }
+  };
+
+  const handleDeleteCategory = async (id: string | number) => {
+    try {
+      await deleteCategory(id);
+      const nextCategoryOptions = categoryOptions.filter(
+        (category) => category.id !== String(id),
+      );
+      setCategoryOptions(nextCategoryOptions);
+      setCategories(nextCategoryOptions.map((category) => category.name));
+      showToast("Đã xóa danh mục thành công.", "info");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Xóa danh mục thất bại.",
+        "error",
+      );
+    }
   };
 
   // Admin restock simulation
@@ -754,7 +879,12 @@ export default function App() {
                   orders={orders}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   products={products}
+                  categories={categoryOptions}
                   onRestockProduct={handleRestockProduct}
+                  onCreateProduct={handleCreateProduct}
+                  onCreateCategory={handleCreateCategory}
+                  onUpdateCategory={handleUpdateCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   users={users}
                   onUpdateUserRole={handleUpdateUserRole}
                   onUpdateUserStatus={handleUpdateUserStatus}

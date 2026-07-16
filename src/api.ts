@@ -1,4 +1,11 @@
-import type { CartItem, Order, OrderStatus, Product, UserAccount } from "./types";
+import type {
+  CartItem,
+  Category,
+  Order,
+  OrderStatus,
+  Product,
+  UserAccount,
+} from "./types";
 
 type ApiResponse<T> = {
   code: number;
@@ -87,10 +94,25 @@ type CategoryPayload = {
   productCount?: number | string;
 };
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(
-  /\/$/,
-  "",
-);
+type CreateProductPayload = {
+  name: string;
+  slug: string;
+  detailedDescription: string;
+  thumbnailUrl: string;
+  galleryUrls: string[];
+  categoryId: number;
+  inventoryCount: number;
+  amount: number;
+  originalAmount: number;
+  currency: string;
+  supportEmail: string;
+  supportTelegram: string;
+};
+
+const API_BASE = (
+  (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env
+    ?.VITE_API_BASE_URL ?? "/api"
+).replace(/\/$/, "");
 
 function getStoredToken() {
   if (typeof window === "undefined") return null;
@@ -143,6 +165,18 @@ async function requestJson<T>(
     code: data?.code ?? 0,
     message: data?.message,
     result: wrappedResult as T,
+  };
+}
+
+function toCategory(payload?: CategoryPayload | null): Category {
+  return {
+    id: String(payload?.id ?? ""),
+    name: payload?.name ?? "Khác",
+    slug: payload?.slug ?? "",
+    image: payload?.image ?? "",
+    description: payload?.description ?? "",
+    status: payload?.status ?? "ACTIVE",
+    productCount: Number(payload?.productCount ?? 0),
   };
 }
 
@@ -249,7 +283,7 @@ function toOrder(payload?: OrderPayload | null): Order {
   };
 }
 
-function normalizePage<T>(payload: unknown, mapper: (item: any) => T): T[] {
+function normalizePage<T>(payload: unknown, mapper: (item: unknown) => T): T[] {
   if (Array.isArray(payload)) {
     return payload.map(mapper);
   }
@@ -312,15 +346,64 @@ export async function getProductById(id: string | number) {
 
 export async function listCategories() {
   const response = await requestJson<unknown>("/categories?page=0&size=20");
-  return normalizePage<CategoryPayload>(response.result, (payload) => ({
-    id: String(payload?.id ?? ""),
-    name: payload?.name ?? "Khác",
-    slug: payload?.slug,
-    image: payload?.image,
-    description: payload?.description,
-    status: payload?.status,
-    productCount: Number(payload?.productCount ?? 0),
-  }));
+  return normalizePage<CategoryPayload>(response.result, toCategory);
+}
+
+export async function createCategory(payload: {
+  name: string;
+  slug: string;
+  image?: string;
+  description?: string;
+  status?: string;
+}) {
+  const response = await requestJson<unknown>("/admin/categories", {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      slug: payload.slug,
+      image: payload.image ?? "",
+      description: payload.description ?? "",
+      status: payload.status ?? "ACTIVE",
+    }),
+  });
+  return toCategory((response.result as CategoryPayload) ?? null);
+}
+
+export async function updateCategory(
+  id: string | number,
+  payload: {
+    name: string;
+    slug: string;
+    image?: string;
+    description?: string;
+    status?: string;
+  },
+) {
+  const response = await requestJson<unknown>(`/admin/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: payload.name,
+      slug: payload.slug,
+      image: payload.image ?? "",
+      description: payload.description ?? "",
+      status: payload.status ?? "ACTIVE",
+    }),
+  });
+  return toCategory((response.result as CategoryPayload) ?? null);
+}
+
+export async function deleteCategory(id: string | number) {
+  await requestJson<unknown>(`/admin/categories/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function createAdminProduct(payload: CreateProductPayload) {
+  const response = await requestJson<unknown>("/admin/products", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return toProduct((response.result as ProductPayload) ?? null);
 }
 
 export async function getCart() {
