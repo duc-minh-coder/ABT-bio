@@ -64,30 +64,9 @@ import {
 
 export default function App() {
   // 1. Session State Variables
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem("abt_current_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-  const [users, setUsers] = useState<UserAccount[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_users");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [posts, setPosts] = useState<Post[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_posts");
-      return saved ? JSON.parse(saved) : MOCK_POSTS;
-    } catch (e) {
-      return MOCK_POSTS;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
 
   // 2. Simulated Routing paths
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -122,86 +101,11 @@ export default function App() {
   }, []);
 
   // 3. E-commerce Stock, Cart & Orders States
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_products");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [categories, setCategories] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_categories");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [categoryOptions, setCategoryOptions] = useState<Category[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_category_options");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_cart_items");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem("abt_orders");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // Keep states synchronized with localStorage
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem("abt_current_user", JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem("abt_current_user");
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_users", JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_posts", JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_products", JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_categories", JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "abt_category_options",
-      JSON.stringify(categoryOptions),
-    );
-  }, [categoryOptions]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_cart_items", JSON.stringify(cartItems));
-  }, [cartItems]);
-
-  useEffect(() => {
-    localStorage.setItem("abt_orders", JSON.stringify(orders));
-  }, [orders]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [discountRate, setDiscountRate] = useState<number>(0);
   const [selectedProductDetail, setSelectedProductDetail] =
     useState<Product | null>(null);

@@ -6,6 +6,7 @@ export interface Category {
   description?: string;
   status: string;
   productCount: number;
+  products?: Product[];
 }
 
 export interface Product {

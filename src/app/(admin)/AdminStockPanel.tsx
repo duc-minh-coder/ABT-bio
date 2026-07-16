@@ -495,37 +495,67 @@ export default function AdminStockPanel({
         {categories.map((category) => (
           <div
             key={category.id}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-4"
+            className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-4"
           >
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-slate-900 dark:text-white">
-                  {category.name}
-                </span>
-                <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-cyan-700">
-                  {category.status}
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {category.name}
+                  </span>
+                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-cyan-700">
+                    {category.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  /{category.slug} • {category.productCount} sản phẩm
+                </p>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">
-                /{category.slug} • {category.productCount} sản phẩm
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEditCategory(category)}
+                  className="flex items-center gap-1 rounded-2xl border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300"
+                >
+                  <PencilLine className="h-3.5 w-3.5" /> Sửa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCategory(category)}
+                  className="flex items-center gap-1 rounded-2xl border border-rose-300 px-3 py-2 text-[11px] font-semibold text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa
+                </button>
+              </div>
+            </div>
+
+            {(category.products ?? []).length > 0 ? (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {category.products?.map((product) => (
+                  <div
+                    key={product.id}
+                    className="rounded-xl border border-slate-200 bg-white/80 p-3 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {product.name}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                        {product.stock} tồn kho
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {product.description ||
+                        "Sản phẩm đang được liên kết với danh mục này."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-[11px] text-slate-500">
+                Chưa có sản phẩm nào trong danh mục này.
               </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleEditCategory(category)}
-                className="flex items-center gap-1 rounded-2xl border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300"
-              >
-                <PencilLine className="h-3.5 w-3.5" /> Sửa
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteCategory(category)}
-                className="flex items-center gap-1 rounded-2xl border border-rose-300 px-3 py-2 text-[11px] font-semibold text-rose-600"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Xóa
-              </button>
-            </div>
+            )}
           </div>
         ))}
       </div>

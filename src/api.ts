@@ -92,6 +92,7 @@ type CategoryPayload = {
   description?: string;
   status?: string;
   productCount?: number | string;
+  products?: ProductPayload[];
 };
 
 type CreateProductPayload = {
@@ -177,6 +178,9 @@ function toCategory(payload?: CategoryPayload | null): Category {
     description: payload?.description ?? "",
     status: payload?.status ?? "ACTIVE",
     productCount: Number(payload?.productCount ?? 0),
+    products: Array.isArray(payload?.products)
+      ? payload.products.map((item) => toProduct(item))
+      : [],
   };
 }
 
@@ -329,8 +333,30 @@ export async function getCurrentUser() {
   return toUserAccount(response.result ?? null);
 }
 
-export async function listProducts() {
-  const response = await requestJson<unknown>("/products?page=0&size=20");
+export async function listProducts(params?: {
+  keyword?: string;
+  categoryId?: number | string | null;
+  page?: number;
+  size?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.keyword) {
+    query.set("keyword", params.keyword);
+  }
+  if (params?.categoryId != null && params.categoryId !== "") {
+    query.set("categoryId", String(params.categoryId));
+  }
+  if (params?.page !== undefined) {
+    query.set("page", String(params.page));
+  }
+  if (params?.size !== undefined) {
+    query.set("size", String(params.size));
+  }
+
+  const queryString = query.toString();
+  const response = await requestJson<unknown>(
+    `/products${queryString ? `?${queryString}` : ""}`,
+  );
   return normalizePage<ProductPayload>(response.result, toProduct);
 }
 
