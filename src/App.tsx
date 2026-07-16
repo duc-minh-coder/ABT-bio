@@ -153,8 +153,11 @@ export default function App() {
       try {
         const user = await getCurrentUser();
         setCurrentUser(user);
-      } catch {
+      } catch (error) {
+        console.error("Không thể khôi phục phiên đăng nhập:", error);
         clearStoredAuthTokens();
+        // Không còn user để tải giỏ hàng -> thoát trạng thái loading
+        setIsCartLoading(false);
       }
     };
     hydrateCurrentUser();
@@ -189,31 +192,36 @@ export default function App() {
       }
 
       if (!currentUser) {
-        setIsCartLoading(false);
+        // Còn token nghĩa là user sắp được hydrate và effect này sẽ chạy lại;
+        // giữ trạng thái loading để tránh flash "giỏ hàng trống".
+        const { token } = getStoredAuthTokens();
+        if (!token) {
+          setIsCartLoading(false);
+        }
         return;
       }
 
-      try {
-        const [serverCart, serverOrders] = await Promise.all([
-          getCart(),
-          listOrders(),
-        ]);
-        if (serverCart.length > 0) {
-          setCartItems(serverCart);
-        } else {
-          setCartItems([]);
-        }
-        if (serverOrders.length > 0) {
-          setOrders(serverOrders);
-        } else {
-          setOrders([]);
-        }
-      } catch {
+      // Cô lập cart và orders: lỗi của bên này không được xóa dữ liệu bên kia
+      const [cartResult, ordersResult] = await Promise.allSettled([
+        getCart(),
+        listOrders(),
+      ]);
+
+      if (cartResult.status === "fulfilled") {
+        setCartItems(cartResult.value);
+      } else {
+        console.error("Không thể tải giỏ hàng:", cartResult.reason);
         setCartItems([]);
-        setOrders([]);
-      } finally {
-        setIsCartLoading(false);
       }
+
+      if (ordersResult.status === "fulfilled") {
+        setOrders(ordersResult.value);
+      } else {
+        console.error("Không thể tải danh sách đơn hàng:", ordersResult.reason);
+        setOrders([]);
+      }
+
+      setIsCartLoading(false);
     };
 
     loadInitialData();

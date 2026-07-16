@@ -199,10 +199,9 @@ function toCategory(payload?: CategoryPayload | null): Category {
 }
 
 function toProduct(payload?: ProductPayload | null): Product {
+  const rawCategory = payload?.category;
   const categoryName =
-    typeof payload?.category === "object" && payload.category
-      ? payload.category.name
-      : payload?.category;
+    typeof rawCategory === "object" ? rawCategory?.name : rawCategory;
   const pricePayload = Array.isArray(payload?.prices)
     ? payload.prices[0]
     : null;
@@ -321,7 +320,8 @@ function toOrder(payload?: OrderPayload | null): Order {
   };
 }
 
-function normalizePage<T>(payload: unknown, mapper: (item: unknown) => T): T[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizePage<T>(payload: unknown, mapper: (item: any) => T): T[] {
   if (Array.isArray(payload)) {
     return payload.map(mapper);
   }
@@ -391,12 +391,12 @@ export async function listProducts(params?: {
   const response = await requestJson<unknown>(
     `/products${queryString ? `?${queryString}` : ""}`,
   );
-  return normalizePage<ProductPayload>(response.result, toProduct);
+  return normalizePage(response.result, toProduct);
 }
 
 export async function getBestSellingProducts() {
   const response = await requestJson<unknown>("/products/best-selling");
-  return normalizePage<ProductPayload>(response.result, toProduct);
+  return normalizePage(response.result, toProduct);
 }
 
 export async function getProductById(id: string | number) {
@@ -406,7 +406,7 @@ export async function getProductById(id: string | number) {
 
 export async function listCategories() {
   const response = await requestJson<unknown>("/categories?page=0&size=20");
-  return normalizePage<CategoryPayload>(response.result, toCategory);
+  return normalizePage(response.result, toCategory);
 }
 
 export async function createCategory(payload: {
@@ -479,7 +479,7 @@ export async function updateAdminProduct(
 
 export async function getCart() {
   const response = await requestJson<unknown>("/cart");
-  return normalizePage<CartPayload>(response.result, toCartItem);
+  return normalizePage(response.result, toCartItem);
 }
 
 export async function addCartItem(
@@ -490,14 +490,14 @@ export async function addCartItem(
     method: "POST",
     body: JSON.stringify({ productId: Number(productId), quantity }),
   });
-  return normalizePage<CartPayload>(response.result, toCartItem);
+  return normalizePage(response.result, toCartItem);
 }
 
 export async function removeCartItem(productId: number | string) {
   const response = await requestJson<unknown>(`/cart/product/${productId}`, {
     method: "DELETE",
   });
-  return normalizePage<CartPayload>(response.result, toCartItem);
+  return normalizePage(response.result, toCartItem);
 }
 
 export async function checkoutCart(payload: {
@@ -535,26 +535,26 @@ export async function listOrders() {
   const response = await requestJson<unknown>(
     "/orders/completed?page=0&size=20",
   );
-  return normalizePage<OrderPayload>(response.result, toOrder);
+  return normalizePage(response.result, toOrder);
 }
 
 export async function listMyCompletedOrders(page = 0, size = 20) {
   const response = await requestJson<unknown>(
     `/my-completed?page=${page}&size=${size}`,
   );
-  return normalizePage<OrderPayload>(response.result, toOrder);
+  return normalizePage(response.result, toOrder);
 }
 
 export async function listAdminCompletedOrders(page = 0, size = 20) {
   const response = await requestJson<unknown>(
     `/admin/completed?page=${page}&size=${size}`,
   );
-  return normalizePage<OrderPayload>(response.result, toOrder);
+  return normalizePage(response.result, toOrder);
 }
 
 export async function listAdminUsers() {
   const response = await requestJson<unknown>("/admin/users?page=0&size=20");
-  return normalizePage<MePayload>(response.result, (payload) =>
+  return normalizePage(response.result, (payload) =>
     toUserAccount(payload as MePayload),
   );
 }
