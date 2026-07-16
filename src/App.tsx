@@ -17,6 +17,7 @@ import {
   clearStoredAuthTokens,
   createAdminProduct,
   createCategory,
+  updateAdminProduct,
   deleteCategory,
   getCurrentUser,
   getStoredAuthTokens,
@@ -443,6 +444,50 @@ export default function App() {
     }
   };
 
+  const handleUpdateProduct = async (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      detailedDescription: string;
+      thumbnailUrl: string;
+      galleryUrls: string[];
+      categoryId: number;
+      inventoryCount: number;
+      amount: number;
+      originalAmount: number;
+      currency: string;
+      supportEmail: string;
+      supportTelegram: string;
+    },
+  ) => {
+    try {
+      const updatedProduct = await updateAdminProduct(id, payload);
+      setProducts((prev) =>
+        prev.map((product) =>
+          product.id === String(id) ? updatedProduct : product,
+        ),
+      );
+      const matchedCategory = categoryOptions.find(
+        (category) => category.id === String(payload.categoryId),
+      );
+      if (matchedCategory && !categories.includes(matchedCategory.name)) {
+        setCategories((prev) => [...prev, matchedCategory.name]);
+        setCategoryOptions((prev) =>
+          prev.some((category) => category.id === matchedCategory.id)
+            ? prev
+            : [...prev, matchedCategory],
+        );
+      }
+      showToast(`Đã cập nhật sản phẩm: ${updatedProduct.name}`, "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Cập nhật sản phẩm thất bại.",
+        "error",
+      );
+    }
+  };
+
   const handleCreateCategory = async (payload: {
     name: string;
     slug: string;
@@ -786,6 +831,7 @@ export default function App() {
                   categories={categoryOptions}
                   onRestockProduct={handleRestockProduct}
                   onCreateProduct={handleCreateProduct}
+                  onUpdateProduct={handleUpdateProduct}
                   onCreateCategory={handleCreateCategory}
                   onUpdateCategory={handleUpdateCategory}
                   onDeleteCategory={handleDeleteCategory}

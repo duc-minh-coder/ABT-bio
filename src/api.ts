@@ -432,6 +432,17 @@ export async function createAdminProduct(payload: CreateProductPayload) {
   return toProduct((response.result as ProductPayload) ?? null);
 }
 
+export async function updateAdminProduct(
+  id: string | number,
+  payload: CreateProductPayload,
+) {
+  const response = await requestJson<unknown>(`/admin/products/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return toProduct((response.result as ProductPayload) ?? null);
+}
+
 export async function getCart() {
   const response = await requestJson<unknown>("/cart");
   return normalizePage<CartPayload>(response.result, toCartItem);

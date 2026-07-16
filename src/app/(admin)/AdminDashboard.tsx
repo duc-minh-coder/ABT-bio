@@ -35,6 +35,23 @@ interface AdminDashboardProps {
     supportEmail: string;
     supportTelegram: string;
   }) => Promise<void> | void;
+  onUpdateProduct: (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      detailedDescription: string;
+      thumbnailUrl: string;
+      galleryUrls: string[];
+      categoryId: number;
+      inventoryCount: number;
+      amount: number;
+      originalAmount: number;
+      currency: string;
+      supportEmail: string;
+      supportTelegram: string;
+    },
+  ) => Promise<void> | void;
   onCreateCategory: (payload: {
     name: string;
     slug: string;
@@ -82,6 +99,7 @@ export default function AdminDashboard({
   categories,
   onRestockProduct,
   onCreateProduct,
+  onUpdateProduct,
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
@@ -131,6 +149,7 @@ export default function AdminDashboard({
           categories={categories}
           onRestockProduct={onRestockProduct}
           onCreateProduct={onCreateProduct}
+          onUpdateProduct={onUpdateProduct}
           onCreateCategory={onCreateCategory}
           onUpdateCategory={onUpdateCategory}
           onDeleteCategory={onDeleteCategory}

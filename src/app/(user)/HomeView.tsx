@@ -129,7 +129,7 @@ export default function HomeView({
             <div className="lg:col-span-5 relative mt-8 lg:mt-0">
               <div className="relative rounded-2xl border border-slate-800 bg-slate-900 p-2 shadow-2xl shadow-cyan-500/5">
                 <img
-                  src="https://images.unsplash.com/photo-1579154204601-01588f351167?w=600&auto=format&fit=crop&q=80"
+                  src="./assets/images/Light-Cycler-96.jpg"
                   alt="ABT Biomedical Equipment Showcase"
                   className="rounded-xl object-cover w-full h-[320px] sm:h-[380px] lg:h-[400px] border border-slate-800 brightness-95"
                 />

@@ -27,6 +27,23 @@ interface AdminStockPanelProps {
     supportEmail: string;
     supportTelegram: string;
   }) => Promise<void> | void;
+  onUpdateProduct: (
+    id: string | number,
+    payload: {
+      name: string;
+      slug: string;
+      detailedDescription: string;
+      thumbnailUrl: string;
+      galleryUrls: string[];
+      categoryId: number;
+      inventoryCount: number;
+      amount: number;
+      originalAmount: number;
+      currency: string;
+      supportEmail: string;
+      supportTelegram: string;
+    },
+  ) => Promise<void> | void;
   onCreateCategory: (payload: {
     name: string;
     slug: string;
@@ -52,11 +69,12 @@ export default function AdminStockPanel({
   categories,
   onRestockProduct,
   onCreateProduct,
+  onUpdateProduct,
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
 }: AdminStockPanelProps) {
-  const [form, setForm] = useState({
+  const getDefaultProductForm = () => ({
     name: "",
     slug: "",
     detailedDescription: "",
@@ -71,6 +89,8 @@ export default function AdminStockPanel({
     supportTelegram: "@support",
   });
 
+  const [form, setForm] = useState(getDefaultProductForm);
+
   const [categoryForm, setCategoryForm] = useState({
     id: "",
     name: "",
@@ -82,6 +102,7 @@ export default function AdminStockPanel({
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
     null,
   );
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
     return Boolean(
@@ -96,7 +117,7 @@ export default function AdminStockPanel({
     event.preventDefault();
     if (!canSubmit) return;
 
-    await onCreateProduct({
+    const payload = {
       name: form.name.trim(),
       slug: form.slug.trim(),
       detailedDescription: form.detailedDescription.trim(),
@@ -112,21 +133,16 @@ export default function AdminStockPanel({
       currency: form.currency.trim() || "VND",
       supportEmail: form.supportEmail.trim(),
       supportTelegram: form.supportTelegram.trim(),
-    });
+    };
 
-    setForm((prev) => ({
-      ...prev,
-      name: "",
-      slug: "",
-      detailedDescription: "",
-      thumbnailUrl: "",
-      galleryUrls: "",
-      inventoryCount: 10,
-      amount: 1000000,
-      originalAmount: 1200000,
-      supportEmail: "support@example.com",
-      supportTelegram: "@support",
-    }));
+    if (editingProductId) {
+      await onUpdateProduct(editingProductId, payload);
+    } else {
+      await onCreateProduct(payload);
+    }
+
+    setEditingProductId(null);
+    setForm(getDefaultProductForm());
   };
 
   const handleCategorySubmit = async (event: React.FormEvent) => {
@@ -179,6 +195,32 @@ export default function AdminStockPanel({
     await onDeleteCategory(category.id);
   };
 
+  const handleEditProduct = (product: Product) => {
+    setEditingProductId(product.id);
+    const matchedCategory = categories.find(
+      (category) => category.name === product.category,
+    );
+    setForm({
+      name: product.name,
+      slug: product.slug ?? "",
+      detailedDescription: product.description,
+      thumbnailUrl: product.image ?? "",
+      galleryUrls: product.specs.join("\n"),
+      categoryId: matchedCategory?.id ?? categories[0]?.id ?? "1",
+      inventoryCount: product.stock,
+      amount: product.price,
+      originalAmount: product.price,
+      currency: "VND",
+      supportEmail: "support@example.com",
+      supportTelegram: "@support",
+    });
+  };
+
+  const handleCancelEditProduct = () => {
+    setEditingProductId(null);
+    setForm(getDefaultProductForm());
+  };
+
   return (
     <section className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 p-6 rounded-3xl shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -198,7 +240,7 @@ export default function AdminStockPanel({
       >
         <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white uppercase">
           <PackagePlus className="h-4 w-4 text-cyan-600" />
-          Tạo hàng hóa mới
+          {editingProductId ? "Chỉnh sửa hàng hóa" : "Tạo hàng hóa mới"}
         </div>
         <div className="grid md:grid-cols-2 gap-4 text-xs text-slate-700 dark:text-slate-300">
           <label className="space-y-1">
@@ -371,13 +413,24 @@ export default function AdminStockPanel({
             />
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="rounded-2xl bg-cyan-600 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Tạo sản phẩm
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="rounded-2xl bg-cyan-600 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {editingProductId ? "Cập nhật sản phẩm" : "Tạo sản phẩm"}
+          </button>
+          {editingProductId && (
+            <button
+              type="button"
+              onClick={handleCancelEditProduct}
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-700 dark:border-slate-700 dark:text-slate-300"
+            >
+              Hủy
+            </button>
+          )}
+        </div>
       </form>
 
       <form
@@ -602,13 +655,25 @@ export default function AdminStockPanel({
                   <span>{product.stock}</span>
                 </div>
 
-                <button
-                  onClick={() => onRestockProduct(product.id, 5)}
-                  className="w-full rounded-3xl bg-slate-900 text-white py-2 text-[11px] font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Nhập +5
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEditProduct(product)}
+                    className="flex-1 rounded-3xl border border-slate-300 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <PencilLine className="h-3.5 w-3.5" />
+                      Sửa
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => onRestockProduct(product.id, 5)}
+                    className="flex-1 rounded-3xl bg-slate-900 text-white py-2 text-[11px] font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Nhập +5
+                  </button>
+                </div>
               </div>
             </div>
           );
