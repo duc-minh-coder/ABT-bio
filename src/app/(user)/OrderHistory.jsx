@@ -259,6 +259,15 @@ export default function OrderHistory({ isAdmin = false, page = 0, size = 20 }) {
                         >
                           {statusMeta.label}
                         </span>
+
+                        {statusMeta.label == "PAID" && 
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.classes}`}
+                          >
+                            Đang chờ giao hàng
+                          </span>
+                        }
+                        
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {formatDate(order?.date || order?.createdAt)}
