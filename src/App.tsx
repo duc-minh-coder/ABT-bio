@@ -229,6 +229,21 @@ export default function App() {
 
   // Add Item to Lab Cart
   const handleAddToCart = async (product: Product) => {
+    // Check if product is already in cart
+    const existingItem = cartItems.find(
+      (item) => item.product.id === product.id,
+    );
+    const nextQuantity = existingItem ? existingItem.quantity + 1 : 1;
+
+    // Validate stock availability
+    if (nextQuantity > product.stock) {
+      showToast(
+        `Chỉ còn ${product.stock} ${product.unit} trong kho (hiện đã có ${existingItem?.quantity || 0} trong giỏ)`,
+        "error",
+      );
+      return;
+    }
+
     try {
       await addCartItem(product.id, 1);
       await refreshCartFromServer();
