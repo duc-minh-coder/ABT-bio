@@ -229,47 +229,23 @@ export default function App() {
 
   // Add Item to Lab Cart
   const handleAddToCart = async (product: Product) => {
-    const existing = cartItems.find((item) => item.product.id === product.id);
-    const count = existing ? existing.quantity : 0;
-
-    if (count >= product.stock) {
-      showToast(
-        `Không thể chọn thêm. Ưu trữ lượng của mã thiết bị này tối đa là ${product.stock} ${product.unit}.`,
-        "error",
-      );
-      return;
-    }
-
-    setCartItems((prev) => {
-      const alreadyExists = prev.some((item) => item.product.id === product.id);
-      if (alreadyExists) {
-        return prev.map((item) =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-
     try {
       await addCartItem(product.id, 1);
       await refreshCartFromServer();
       showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
     } catch {
-      showToast(`Đã thêm máy vào giỏ hàng: ${product.name}`, "success");
+      showToast(`Không thể thêm máy vào giỏ hàng.`, "error");
     }
   };
 
   // Update Cart quantities
   const handleUpdateQuantity = async (productId: string, delta: number) => {
     const targetItem = cartItems.find((item) => item.product.id === productId);
-    if (!targetItem) {
-      return;
-    }
+    if (!targetItem) return;
 
     const nextVal = targetItem.quantity + delta;
     const maxVal = targetItem.product.stock;
+
     if (nextVal > maxVal) {
       showToast(
         `Vượt quá trữ lượng khả dụng (${maxVal} ${targetItem.product.unit})`,
@@ -278,67 +254,35 @@ export default function App() {
       return;
     }
 
-    if (delta > 0) {
-      setCartItems((prev) =>
-        prev.map((item) => {
-          if (item.product.id === productId) {
-            return { ...item, quantity: Math.max(1, nextVal) };
-          }
-          return item;
-        }),
-      );
-
-      try {
-        await addCartItem(productId, 1);
-        await refreshCartFromServer();
-        return;
-      } catch {
-        showToast(`Đã cập nhật số lượng thiết bị trong giỏ hàng`, "info");
-        return;
+    try {
+      // If incrementing: just add
+      if (delta > 0) {
+        await addCartItem(productId, delta);
       }
-    }
-
-    if (nextVal <= 0) {
-      const index = cartItems.findIndex((item) => item.product.id === productId);
-      if (index >= 0) {
-        setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
-        try {
-          await removeCartItem(productId);
-          await refreshCartFromServer();
-          showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
-          return;
-        } catch {
-          showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
-          return;
-        }
+      // If decrementing to 0 or below: remove item
+      else if (nextVal <= 0) {
+        await removeCartItem(productId);
       }
-    }
+      // If decrementing but keeping quantity > 0: delete then re-add with new qty
+      else {
+        await removeCartItem(productId);
+        await addCartItem(productId, nextVal);
+      }
 
-    setCartItems((prev) =>
-      prev.map((item) => {
-        if (item.product.id === productId) {
-          return { ...item, quantity: Math.max(1, nextVal) };
-        }
-        return item;
-      }),
-    );
+      await refreshCartFromServer();
+    } catch (error) {
+      showToast(`Không thể cập nhật giỏ hàng.`, "error");
+    }
   };
 
   // Remove Item
   const handleRemoveItem = async (productId: string) => {
-    const existing = cartItems.find((item) => item.product.id === productId);
-    if (!existing) {
-      return;
-    }
-
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
-
     try {
       await removeCartItem(productId);
       await refreshCartFromServer();
       showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
     } catch {
-      showToast(`Đã xóa thiết bị ra khỏi giỏ hàng`, "info");
+      showToast(`Không thể xóa thiết bị khỏi giỏ hàng.`, "error");
     }
   };
 
@@ -603,9 +547,24 @@ export default function App() {
   };
 
   // Clear Cart helper
-  const handleClearCart = () => {
-    setCartItems([]);
-    setDiscountRate(0);
+  const handleClearCart = async () => {
+    try {
+      const itemsToRemove = [...cartItems];
+      for (const item of itemsToRemove) {
+        try {
+          await removeCartItem(item.product.id);
+        } catch {
+          // continue removing other items even if one fails
+        }
+      }
+      await refreshCartFromServer();
+      setDiscountRate(0);
+      showToast(`Đã xóa sạch giỏ hàng`, "info");
+    } catch {
+      setCartItems([]);
+      setDiscountRate(0);
+      showToast(`Đã xóa sạch giỏ hàng`, "info");
+    }
   };
 
   // Auth/Session action triggers
@@ -672,8 +631,7 @@ export default function App() {
   // Filter personal orders
   // "còn user sẽ có các chức năng... xem orders của bản thân"
   const personalOrders = orders.filter((o) => {
-    if (!currentUser) 
-      return false;
+    if (!currentUser) return false;
     // Match by email
     return o.email.toLowerCase() === currentUser.email.toLowerCase();
   });
